@@ -1,11 +1,13 @@
-# CLAUDE.md - Surat Batak (Batak Script G-Code Generator)
+# CLAUDE.md - Algorithmic Plotter (G-Code Generator)
 
 ## Project Overview
-**Surat Batak** is a modern React-based web application for generating single-stroke G-code to plot Batak script (Surat Batak Toba) on pen plotters and CNC machines. Users input Latin text, which is automatically transliterated to Batak Unicode, then assembled into optimized G-code for drawing.
+**Algorithmic Plotter** is a modern React-based creative coding tool for generating vector drawings and G-code for pen plotters and CNC machines. Users write JavaScript code using a p5.js-like drawing API, which generates vector paths that are then converted to optimized G-code.
 
 ## Architecture & Tech Stack
 - **Frontend**: React 19 + TypeScript + Vite 7
+- **Code Editor**: Monaco Editor with custom API autocomplete
 - **Styling**: Tailwind CSS 4 (dark slate theme)
+- **Layout**: Allotment (resizable split panes)
 - **State Management**: React hooks (useState, useCallback, useEffect)
 - **Package Manager**: pnpm
 - **Node Version**: 24.x (managed via asdf)
@@ -16,82 +18,110 @@
 brush-react/
 ├── src/
 │   ├── components/
-│   │   ├── TextInput.tsx      # Latin/Batak text input with live preview
-│   │   ├── SettingsPanel.tsx  # Collapsible settings (Layout, Machine, Ink, etc.)
-│   │   ├── Preview.tsx        # Canvas preview with G-code simulation
-│   │   ├── GCodeOutput.tsx    # G-code display with stats, copy/download
-│   │   ├── Controls.tsx       # Generate/Upload/Run action buttons
-│   │   └── Console.tsx        # Timestamped log output panel
+│   │   ├── CodeEditor.tsx        # Monaco editor with Drawing API autocomplete
+│   │   ├── VectorPreview.tsx     # Canvas preview with G-code simulation
+│   │   ├── VectorSettingsPanel.tsx # Collapsible settings panel
+│   │   ├── Toolbar.tsx           # Run/Export/Upload buttons + Examples dropdown
+│   │   ├── Console.tsx           # Timestamped log output panel
+│   │   └── [legacy components]   # Old Batak-specific components (unused)
 │   ├── hooks/
-│   │   ├── useSettings.ts     # Settings state management with defaults
-│   │   └── useConsole.ts      # Console logging hook
+│   │   ├── useVectorSettings.ts  # Settings state for vector drawing
+│   │   └── useConsole.ts         # Console logging hook
 │   ├── utils/
-│   │   ├── transliteration.ts # Latin → Batak Unicode conversion
-│   │   ├── pathOptimizer.ts   # Path merging & L-R optimization
-│   │   ├── backlashFixer.ts   # Mechanical backlash compensation
-│   │   ├── gcodeGenerator.ts  # Core G-code generation logic
-│   │   └── hardware.ts        # FluidNC controller API (upload/run)
+│   │   ├── drawingApi.ts         # Core Drawing API (p5-like interface)
+│   │   ├── vectorGcodeGenerator.ts # Vector paths → G-code conversion
+│   │   ├── pathOptimizer.ts      # Path merging & L-R optimization
+│   │   ├── backlashFixer.ts      # Mechanical backlash compensation
+│   │   └── hardware.ts           # FluidNC controller API
 │   ├── data/
-│   │   └── glyphs.ts          # Batak glyph path data (~6800 lines)
-│   ├── types.ts               # TypeScript type definitions
-│   ├── App.tsx                # Main application component
-│   ├── main.tsx               # React entry point
-│   └── index.css              # Tailwind CSS imports
-├── vite.config.ts             # Vite + Tailwind configuration
-├── tsconfig.json              # TypeScript configuration
-├── package.json               # Dependencies and scripts
-└── .tool-versions             # asdf Node.js version (24.2.0)
+│   │   └── examples.ts           # Built-in algorithm examples
+│   ├── App.tsx                   # Main application with split-pane layout
+│   ├── main.tsx                  # React entry point
+│   └── index.css                 # Tailwind + Allotment styles
+├── vite.config.ts
+├── tsconfig.json
+├── package.json
+└── .tool-versions
 ```
 
 ## Core Features
 
-### 1. Text Input & Transliteration (`src/utils/transliteration.ts`)
-- Converts Latin text to Batak Unicode characters
-- Handles consonant-vowel combinations and inherent 'a'
-- Special handling for `ng` → Amborolong (ᯱ)
-- Pangolat (virama) for closed syllables
-- Live preview shows Batak script as you type
+### 1. Drawing API (`src/utils/drawingApi.ts`)
+A p5.js-like API that captures vector paths for plotting:
 
-### 2. G-Code Generation (`src/utils/gcodeGenerator.ts`)
-- Retrieves glyph paths from `glyphs.ts` based on Unicode
+```javascript
+// Available functions
+line(x1, y1, x2, y2)          // Draw line
+rect(x, y, w, h)              // Draw rectangle
+circle(cx, cy, r)             // Draw circle
+ellipse(cx, cy, rx, ry)       // Draw ellipse
+arc(cx, cy, r, start, end)    // Draw arc
+polygon(points)               // Draw closed polygon
+polyline(points)              // Draw open polyline
+bezier(x1,y1, cx1,cy1, cx2,cy2, x2,y2)  // Cubic bezier
+quadratic(x1,y1, cx,cy, x2,y2)          // Quadratic bezier
+
+// Path building
+beginPath() / moveTo(x,y) / lineTo(x,y) / endPath()
+
+// Noise & random
+noise(x, y?, z?)              // Perlin-like noise (0-1)
+noiseSeed(seed)
+random(min?, max?)            // Seeded random
+randomSeed(seed)
+
+// Math helpers
+map(val, in1, in2, out1, out2)
+constrain(val, min, max)
+lerp(start, stop, amt)
+dist(x1, y1, x2, y2)
+sin(degrees) / cos(degrees)
+radians(deg) / degrees(rad)
+```
+
+### 2. Code Execution
+- User code is executed via `new Function()` with the API exposed as local variables
+- If code defines a `draw(api)` function, it's called automatically
+- Execution is debounced (500ms) for live preview updates
+- Errors are displayed inline in the editor
+
+### 3. G-Code Generation (`src/utils/vectorGcodeGenerator.ts`)
+- Converts vector paths to G-code with proper scaling
 - **Path Optimization**: Sorts strokes L→R, merges connected endpoints
-- **Coordinate Mapping**: Normalized glyphs → physical mm with Y-flip
 - **Backlash Compensation**: Injects corrective moves on direction changes
-- **Ink Dipping**: Auto-inserts dip sequences at configurable intervals
+- **Ink Dipping**: Optional auto-dip sequences at configurable intervals
+- **SVG Export**: Generates clean SVG alongside G-code
 
-### 3. Preview & Simulation (`src/components/Preview.tsx`)
-- Real-time canvas visualization of G-code paths
-- **G-code Based Simulation**: Executes G0/G1/G4 commands with proper timing
-  - G0 (Rapid): 5000 mm/min
-  - G1 (Feed): Uses actual feed rate from G-code
-  - G4 (Dwell): Pauses for specified duration at ink well
-- Smooth position interpolation with pen head indicator
-- Shows travel moves (dashed), start/end markers, ink well location
-- Speed control: 0.25x to 20x playback
-- Current command display (e.g., "G1 FEED 1600mm/min → X45.2 Y70.1")
+### 4. Preview & Simulation (`src/components/VectorPreview.tsx`)
+- Real-time canvas visualization of vector paths
+- G-code simulation with timing based on feed rates
+- Speed control (1x to 20x playback)
+- Pen up/down state indicator
 
-### 4. Hardware Control (`src/utils/hardware.ts`)
-- Direct communication with FluidNC/Esp3D controllers
-- **Upload**: POST G-code as FormData to `/upload`
-- **Run**: GET `/command?cmd=$SD/Run=/filename.gcode`
-- **Test**: Z-axis wiggle to verify connection
-- CORS handling with `no-cors` fallback (blind mode)
-- Default controller IP: `http://192.168.0.248`
+### 5. Built-in Examples (`src/data/examples.ts`)
+- **Maze**: Recursive backtracker maze generation
+- **Spirograph**: Parametric spirograph curves
+- **Flow Field**: Perlin noise flow field
+- **Truchet Tiles**: Random quarter-circle pattern
+- **L-System Tree**: Fractal tree
+- **Concentric Circles**: Simple circle pattern
+- **Grid Pattern**: Diagonal cross pattern
+- **Spiral**: Archimedean spiral
+- **Hatching**: Cross-hatching pattern
+- **Waves**: Sine wave interference
 
 ## Settings (Configurable via UI)
 
 | Category | Setting | Default | Description |
 |----------|---------|---------|-------------|
-| Layout | Target Width | 120mm | Horizontal scale of output |
-| Layout | Offset X/Y | 10/70mm | Starting position |
-| Layout | Kerning | 0.1 units | Inter-character spacing |
-| Machine | Feed Rate | 1600 mm/min | Drawing speed (G1) |
+| Canvas | Width/Height | 150/120 | Input coordinate space |
+| Output | Target Width/Height | 120/100mm | Physical output size |
+| Output | Offset X/Y | 15/20mm | Starting position |
+| Machine | Feed Rate | 1600 mm/min | Drawing speed |
 | Machine | Safe Z | 5mm | Pen retract height |
 | Machine | Backlash X/Y | 0mm | Mechanical compensation |
-| Ink | Dip Interval | 50mm | Distance before re-dipping |
-| Ink | Dip X/Y | 41/5mm | Ink well location |
-| Ink | Continuous Plot | false | Disable dipping |
-| Filter | Artefact Threshold | 0.05mm | Min path length |
+| Ink | Continuous Plot | true | Disable ink dipping |
+| Ink | Dip Interval | 80mm | Distance before re-dipping |
 | Hardware | Controller Host | http://192.168.0.248 | FluidNC IP |
 
 ## Commands
@@ -108,50 +138,67 @@ pnpm run preview      # Preview production build
 asdf set nodejs 24.2.0
 ```
 
+## UI Layout
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  Algorithmic Plotter  │  ▶ Run  │  Examples ▼  │  SVG  │  G-Code  │ Upload │
+├────────────────────────────────┬────────────────────────────────────────────┤
+│                                │                                            │
+│   CODE EDITOR (Monaco)         │   LIVE PREVIEW                             │
+│   ─────────────────────────    │   ────────────────────────────             │
+│                                │                                            │
+│   function draw(api) {         │   [Canvas with vector paths]              │
+│     const cols = 15;           │                                            │
+│     ...                        │   ▶ Simulate  │ Speed: 5x                 │
+│   }                            │                                            │
+│                                ├────────────────────────────────────────────┤
+│                                │  SETTINGS         │  CONSOLE               │
+│                                │  Canvas: 150x120  │  [12:34] 150 paths     │
+│                                │  Output: 120mm    │  [12:34] 423 lines     │
+└────────────────────────────────┴────────────────────────────────────────────┘
+```
+
 ## Guidelines for AI Contributors
 
 ### Do's
-- Keep logic modular in `src/utils/` - each file has a single responsibility
-- Use TypeScript types from `src/types.ts` for consistency
+- Keep logic modular in `src/utils/` - each file has single responsibility
+- Use TypeScript types consistently
 - Preserve Z-hop safety logic (pen must lift before travel moves)
-- Test G-code output manually or via simulation before hardware changes
-- Keep `glyphs.ts` separate - it's large data, rarely needs modification
+- Test G-code output via simulation before hardware changes
+- Add new examples to `src/data/examples.ts`
 
 ### Don'ts
-- Don't modify glyph path data unless specifically fixing font issues
-- Don't remove backlash compensation logic - needed for physical machines
+- Don't execute user code directly - use the Drawing API sandbox
+- Don't remove backlash compensation logic
 - Don't hardcode machine-specific values - use Settings
 - Don't break the G-code simulation timing logic
 
 ### Key Files for Common Tasks
-- **Add new setting**: `src/hooks/useSettings.ts` + `src/components/SettingsPanel.tsx`
-- **Modify G-code output**: `src/utils/gcodeGenerator.ts`
-- **Change transliteration rules**: `src/utils/transliteration.ts`
-- **Update preview rendering**: `src/components/Preview.tsx`
-- **Hardware communication**: `src/utils/hardware.ts`
+- **Add new drawing primitive**: `src/utils/drawingApi.ts`
+- **Add new example**: `src/data/examples.ts`
+- **Modify G-code output**: `src/utils/vectorGcodeGenerator.ts`
+- **Change preview rendering**: `src/components/VectorPreview.tsx`
+- **Add new setting**: `src/hooks/useVectorSettings.ts` + `VectorSettingsPanel.tsx`
 
 ## G-Code Output Format
 
 ```gcode
 %
-; Batak Script G-code
-; Input: tuak batak
-G21 G90 ; mm, absolute
-G0 Z5   ; safe height
-; Initial dip
-G0 X41 Y5
-G1 Z0 F500
-G4 P0.5
-G0 Z5
-; Drawing
-G0 X15.886 Y74.445
-G1 Z0 F500 ; pen down
-G1 X16.199 Y74.709 F1600
-G1 X16.463 Y75.454 F1600
-G0 Z5 ; pen up
+(Algorithmic Drawing G-code)
+G21 G90          ; mm, absolute
+G0 Z5            ; safe height
+G0 X41 Y5        ; go to ink well
+G1 Z-2 F500      ; dip pen
+G4 P0.5          ; dwell
+G0 Z5            ; lift
+G0 X15.0 Y20.0   ; rapid to start
+G1 Z0 F500       ; pen down
+G1 X45.0 Y50.0 F1600  ; draw
+G0 Z5            ; pen up
 ; ... more paths ...
-G0 X10 Y130 ; park
-M30 ; end
+G0 X10 Y130      ; park
+M30              ; end
 %
 ```
 
@@ -161,35 +208,42 @@ M30 ; end
 ┌─────────────────────────────────────────────────────────────────┐
 │                         App.tsx                                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌────────────────────────┐ │
-│  │  TextInput   │  │   Controls   │  │    SettingsPanel       │ │
-│  │  (Latin/     │  │  (Generate,  │  │  (Layout, Machine,     │ │
-│  │   Batak)     │  │   Upload,    │  │   Ink, Hardware)       │ │
-│  │              │  │   Run)       │  │                        │ │
+│  │  CodeEditor  │  │   Toolbar    │  │  VectorSettingsPanel   │ │
+│  │  (Monaco)    │  │  (Run/Export │  │  (Canvas, Output,      │ │
+│  │              │  │   Examples)  │  │   Machine, Hardware)   │ │
 │  └──────────────┘  └──────────────┘  └────────────────────────┘ │
-│                            │                                     │
-│                            ▼                                     │
+│         │                                                        │
+│         ▼                                                        │
 │  ┌──────────────────────────────────────────────────────────┐   │
-│  │                    generateGCode()                        │   │
-│  │  transliteration.ts → pathOptimizer.ts → backlashFixer.ts│   │
-│  │                            │                              │   │
-│  │                     glyphs.ts (data)                      │   │
+│  │           executeDrawingCode(code, width, height)         │   │
+│  │                         │                                 │   │
+│  │                 drawingApi.ts                             │   │
+│  │  (line, rect, circle, noise, random, etc.)               │   │
 │  └──────────────────────────────────────────────────────────┘   │
+│                            │                                     │
+│                     Path[] (vector paths)                        │
 │                            │                                     │
 │              ┌─────────────┴─────────────┐                      │
 │              ▼                           ▼                      │
 │  ┌────────────────────┐      ┌────────────────────┐            │
-│  │      Preview       │      │    GCodeOutput     │            │
-│  │  (Canvas + Sim)    │      │  (Text + Stats)    │            │
+│  │   VectorPreview    │      │ vectorGcodeGenerator│            │
+│  │   (Canvas + Sim)   │      │  (G-code + SVG)    │            │
 │  └────────────────────┘      └────────────────────┘            │
 │                                         │                       │
 │                                         ▼                       │
 │                              ┌────────────────────┐            │
 │                              │    hardware.ts     │            │
-│                              │  (Upload/Run to    │            │
+│                              │  (Upload to        │            │
 │                              │   FluidNC)         │            │
 │                              └────────────────────┘            │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Legacy Version
-The original vanilla JS version is still available in the root directory (`index.html`, `script.js`, `glyphs.js`, `style.css`). Run with `make run` (Python SimpleHTTPServer on port 8000).
+## Legacy Files (Batak Script)
+The original Batak script generator files are still present but unused:
+- `src/components/TextInput.tsx` - Batak text input
+- `src/utils/transliteration.ts` - Latin → Batak conversion
+- `src/data/glyphs.ts` - Batak glyph data (~6800 lines)
+- `src/utils/gcodeGenerator.ts` - Batak-specific G-code generator
+
+These can be removed or kept for reference.
