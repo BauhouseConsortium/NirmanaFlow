@@ -1,0 +1,327 @@
+:root {
+  --bg: #1a0505;
+  /* Black/Dark Red Void */
+  --bg-pattern: #000000;
+  --card-bg: #2b0b0b;
+  /* Gorga Wood Dark */
+  --accent: #d32f2f;
+  /* Gorga Red */
+  --accent-gold: #ffd700;
+  /* Prosperity Gold */
+  --text: #fff8e1;
+  /* Parchment/Bone */
+  --text-muted: #d7ccc8;
+  --border: #8e0000;
+  --input-bg: #420f0f;
+  --shadow-garish: 0 10px 30px rgba(0, 0, 0, 0.7);
+  --font-display: "Times New Roman", serif;
+  --font-body: system-ui, sans-serif;
+}
+
+/* Ulos / Tricolor Theme (Black-Red-White) */
+body.theme-ulos {
+  --bg: #000000;
+  --bg-pattern: #0a0a0a;
+  --card-bg: #050505;
+  --accent: #ff0000;
+  --accent-gold: #ffffff;
+  /* White replaces gold */
+  --text: #ffffff;
+  --text-muted: #bbbbbb;
+  --border: #ff0000;
+  --input-bg: #111111;
+  --shadow-garish: 0 0 15px rgba(255, 0, 0, 0.5);
+}
+
+body.theme-ulos .container {
+  border-style: solid;
+  border-width: 2px;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(circle at 10% 20%, rgba(142, 0, 0, 0.2) 0%, transparent 20%),
+    radial-gradient(circle at 90% 80%, rgba(255, 215, 0, 0.1) 0%, transparent 20%);
+  color: var(--text);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  /* Border removed for full-width integration */
+}
+
+.page-shell {
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+}
+
+.container {
+  background: var(--card-bg);
+  padding: 30px;
+  border-radius: 4px;
+  box-shadow: var(--shadow-garish);
+  border: 3px double var(--accent-gold);
+  /* Double border like carving */
+  position: relative;
+}
+
+/* Ornamental Corners */
+.container::before {
+  content: "";
+  position: absolute;
+  top: 5px;
+  left: 5px;
+  width: 20px;
+  height: 20px;
+  border-top: 2px solid var(--accent-gold);
+  border-left: 2px solid var(--accent-gold);
+}
+
+.container::after {
+  content: "";
+  position: absolute;
+  bottom: 5px;
+  right: 5px;
+  width: 20px;
+  height: 20px;
+  border-bottom: 2px solid var(--accent-gold);
+  border-right: 2px solid var(--accent-gold);
+}
+
+/* Responsive Adjustments for Panels/Phones */
+@media (max-width: 600px) {
+  .container {
+    padding: 15px;
+    border-width: 1px;
+  }
+
+  /* Hide ornamental corners on small screens to save space/cleanliness */
+  .container::before,
+  .container::after {
+    display: none;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+    letter-spacing: 1px;
+  }
+
+  .preview-item {
+    padding: 10px;
+    border-width: 2px;
+  }
+
+  .form-row {
+    gap: 10px;
+  }
+
+  input[type="number"],
+  input[type="text"] {
+    padding: 8px;
+    font-size: 16px;
+    /* Prevents iOS zoom */
+  }
+}
+
+h2 {
+  margin-top: 0;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent-gold);
+  text-align: center;
+  border-bottom: 1px solid var(--accent);
+  padding-bottom: 15px;
+  text-shadow: 2px 2px 0px #000;
+}
+
+p {
+  text-align: center;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.settings-box {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 20px;
+  border: 1px solid var(--border);
+  margin-top: 20px;
+}
+
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.form-group {
+  flex: 1 1 140px;
+  min-width: 140px;
+}
+
+label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.8rem;
+  color: var(--accent-gold);
+  font-family: var(--font-display);
+  letter-spacing: 0.5px;
+}
+
+input[type="number"],
+input[type="text"] {
+  width: 100%;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--accent-gold);
+  font-family: monospace;
+  font-size: 1rem;
+}
+
+input:focus {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
+}
+
+button {
+  background: var(--accent);
+  color: #fff;
+  border: 2px solid #5a0000;
+  padding: 14px 24px;
+  cursor: pointer;
+  font-family: var(--font-display);
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  width: 100%;
+  margin-top: 20px;
+  transition: all 0.2s;
+  box-shadow: 0 4px 0 #3b0000;
+}
+
+button:hover {
+  background: #b71c1c;
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 #3b0000;
+}
+
+button:active {
+  transform: translateY(4px);
+  box-shadow: none;
+}
+
+#status {
+  margin-top: 15px;
+  padding: 10px;
+  background: #000;
+  color: var(--accent-gold);
+  font-family: monospace;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  display: none;
+  text-align: center;
+}
+
+.preview-item {
+  background: #fff;
+  /* Paper for preview */
+  padding: 20px;
+  border: 4px solid var(--card-bg);
+  text-align: center;
+  margin-top: 20px;
+  box-shadow: var(--shadow-garish);
+}
+
+.preview-item h4 {
+  color: #000;
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  margin-top: 0;
+}
+
+canvas {
+  border: 1px dashed #999;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+textarea {
+  width: 100%;
+  height: 200px;
+  margin-top: 20px;
+  background: #1a0505;
+  color: var(--accent-gold);
+  font-family: monospace;
+  padding: 15px;
+  border: 1px solid var(--border);
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+
+.console-output {
+  background: #000;
+  color: #00ff00;
+  /* Terminal green stands out against red */
+  font-family: monospace;
+  font-size: 12px;
+  padding: 10px;
+  height: 150px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  margin-top: 10px;
+  display: block;
+}
+
+#custom-tooltip {
+  position: absolute;
+  background: rgba(43, 11, 11, 0.95);
+  color: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: var(--font-body);
+  font-size: 0.9rem;
+  pointer-events: none;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  max-width: 300px;
+  line-height: 1.4;
+}
+
+body.theme-ulos #custom-tooltip {
+  background: rgba(0, 0, 0, 0.95);
+  border: 1px solid #ff0000;
+  color: #fff;
+}
+
+
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border: 1px solid var(--bg);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent);
+}

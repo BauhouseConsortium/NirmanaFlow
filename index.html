@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <title>Batak Skeleton Assembler</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="page-shell">
+    <div class="container">
+      <div style="position: absolute; top: 15px; right: 15px; display: flex; gap: 5px; z-index: 10;">
+        <button onclick="setTheme('gorga')"
+          style="padding: 4px 8px; font-size: 10px; width: auto; margin:0; border: 1px solid #ffd700; background: #2b0b0b; color: #ffd700;">GORGA</button>
+        <button onclick="setTheme('ulos')"
+          style="padding: 4px 8px; font-size: 10px; width: auto; margin:0; border: 1px solid #fff; background: #000; color: #fff;">ULOS</button>
+      </div>
+      <h2>GORGA BATAK ASSEMBLER</h2>
+      <p
+        style="color: var(--accent-gold); font-family: var(--font-display); font-style: italic; margin-top: -10px; opacity: 0.8;">
+        "Horas ma di hita saluhutna"</p>
+      <p style="color: var(--muted); font-size: 0.9rem;">Assemble pre-skeletonized Batak glyphs for perfect
+        single-stroke G-code.</p>
+
+      <div class="settings-box">
+        <div class="form-row">
+          <div class="form-group" style="flex: 2;">
+            <label for="inputText">Text (Latin or Batak):</label>
+            <input type="text" id="inputText" value="tuak batak" placeholder="Type here..."
+              title="Type Latin text to automatically transliterate to Batak, or paste Batak characters directly.">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="width">Target Width (mm):</label>
+            <input type="number" id="width" value="120" step="1"
+              title="Target width of the text block in millimeters. Determines scale.">
+          </div>
+          <div class="form-group">
+            <label for="ox">Offset X (mm):</label>
+            <input type="number" id="ox" value="10" step="1"
+              title="X-axis offset (start position) from origin in millimeters.">
+          </div>
+          <div class="form-group">
+            <label for="oy">Offset Y (mm):</label>
+            <input type="number" id="oy" value="70" step="1"
+              title="Y-axis offset (start position) from origin in millimeters.">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="feed">Feed Rate (mm/min):</label>
+            <input type="number" id="feed" value="1600" title="Movement speed of the plotter in mm/min.">
+          </div>
+          <div class="form-group">
+            <label for="bx">Backlash X (mm):</label>
+            <input type="number" id="bx" value="0.0" step="0.1"
+              title="Compensate for mechanical slack/play on X-axis (mm).">
+          </div>
+          <div class="form-group">
+            <label for="by">Backlash Y (mm):</label>
+            <input type="number" id="by" value="0.0" step="0.1"
+              title="Compensate for mechanical slack/play on Y-axis (mm).">
+          </div>
+          <div class="form-group">
+            <label for="safeZ">Safe Z (mm):</label>
+            <input type="number" id="safeZ" value="5" step="0.1" title="Height to retract the pen during travel moves.">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="kerning">Kerning (font units):</label>
+            <input type="number" id="kerning" value="0.1" step="0.01"
+              title="Horizontal space between characters (font units). Negative values tighten text.">
+          </div>
+          <div class="form-group">
+            <label for="lineHeight">Line Height:</label>
+            <input type="number" id="lineHeight" value="1.5" step="0.1"
+              title="Vertical spacing between lines (multiplier).">
+          </div>
+          <div class="form-group">
+            <label for="artefactThr">Artefact Filter:</label>
+            <input type="number" id="artefactThr" value="0.05" step="0.01"
+              title="Ignore paths shorter than this length (mm) to reduce noise/dots.">
+          </div>
+        </div>
+
+        <div class="form-row" style="align-items: flex-start;">
+          <div class="form-group" style="flex: 1;">
+            <label for="dipDist">Dip Interval (mm):</label>
+            <input type="number" id="dipDist" value="50" title="Travel distance (mm) before re-dipping the pen.">
+          </div>
+
+          <div class="form-group" style="flex: 2;">
+            <label>Dip Location (XY):</label>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <!-- Inputs -->
+              <div style="display:flex; gap:5px;">
+                <input type="number" id="dipX" value="41" placeholder="X" style="width: 100%;" title="X Coord">
+                <input type="number" id="dipY" value="5" placeholder="Y" style="width: 100%;" title="Y Coord">
+              </div>
+
+              <!-- Color Buttons -->
+              <div style="display:flex; gap:15px; justify-content: flex-start;">
+                <button onclick="setDipColor(1)"
+                  style="width:100px; height:100px; padding:0; border-radius:50%; border:2px solid #fff; background:#ff0080; margin:0; color:white; font-weight:bold; font-size:14px; text-shadow:0 1px 3px rgba(0,0,0,0.8);"
+                  title="Pink (41mm)">Colour 1</button>
+                <button onclick="setDipColor(2)"
+                  style="width:100px; height:100px; padding:0; border-radius:50%; border:2px solid #fff; background:#00ff00; margin:0; color:white; font-weight:bold; font-size:14px; text-shadow:0 1px 3px rgba(0,0,0,0.8);"
+                  title="Green (86mm)">Colour 2</button>
+                <button onclick="setDipColor(3)"
+                  style="width:100px; height:100px; padding:0; border-radius:50%; border:2px solid #fff; background:#00e5ff; margin:0; color:white; font-weight:bold; font-size:14px; text-shadow:0 1px 3px rgba(0,0,0,0.8);"
+                  title="Blue (131mm)">Colour 3</button>
+              </div>
+            </div>
+            <small style="color:#888;">Select pot color to set X.</small>
+          </div>
+        </div>
+
+
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="controllerHost">Controller Host (for Local Mode):</label>
+            <input type="text" id="controllerHost" value="brushographwhite.local"
+              placeholder="e.g. 192.168.0.x or name.local"
+              title="Hostname or IP of the FluidNC controller when running locally.">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group"
+            style="flex:1; align-items:center; flex-direction:row; justify-content:flex-start; gap:10px;">
+            <input type="checkbox" id="isPlotter" style="width:auto; transform:scale(1.5);">
+            <label for="isPlotter" style="margin-bottom:0; cursor:pointer;"
+              title="If checked, disables all ink dipping sequences (Continuous Plot).">Continuous Plot (No
+              Dipping)</label>
+          </div>
+        </div>
+
+        <details>
+          <summary style="cursor: pointer; color: #fff; margin-bottom: 5px;">Advanced: Custom Dip Sequence</summary>
+          <div class="form-row">
+            <div class="form-group" style="flex:1">
+              <label>Custom Dip Sequence (G-code):</label>
+              <textarea id="dipSeq"
+                style="width:100%; height:150px; background:#111; color:#eee; border:1px solid #333; font-family:monospace; padding:5px; white-space: pre;"
+                placeholder="Paste custom G-code here..."
+                title="G-code command sequence to execute for dipping the pen.">; Colour 1 pickup
+G1 Z10 F1000;
+G0 X41 Y5 F1600;
+G1 Z0 F1000;
+G1 X40.102 Y7.295 Z0 S800 F1200;
+G1 X40.026 Y7.642 Z0 F1200;
+G1 X40 Y8 Z0 F1200;
+G1 X40.026 Y8.358 Z0 F1200;
+G1 X40.102 Y8.705 Z0 F1200;
+G1 X40.225 Y9.041 Z0 F1200;
+G1 X40.393 Y9.362 Z0 F1200;
+G1 X40.603 Y9.668 Z0 F1200;
+G1 X40.854 Y9.957 Z0 F1200;
+G1 X41.142 Y10.226 Z0 F1200;
+G1 X41.464 Y10.475 Z0 F1200;
+G1 X41.82 Y10.701 Z0 F1200;
+G1 X42.204 Y10.902 Z0 F1200;
+G1 X42.617 Y11.078 Z0 F1200;
+G1 X43.054 Y11.225 Z0 F1200;
+G1 X43.513 Y11.343 Z0 F1200;
+G1 X43.992 Y11.429 Z0 F1200;
+G1 X44.489 Y11.482 Z0 F1200;
+G1 X45 Y11.5 Z0 F1200;
+G1 X45.511 Y11.482 Z0 F1200;
+G1 X46.008 Y11.429 Z0 F1200;
+G1 X46.487 Y11.343 Z0 F1200;
+G1 X46.946 Y11.225 Z0 F1200;
+G1 X47.383 Y11.078 Z0 F1200;
+G1 X47.796 Y10.902 Z0 F1200;
+G1 X48.18 Y10.701 Z0 F1200;
+G1 X48.536 Y10.475 Z0 F1200;
+G1 X48.858 Y10.226 Z0 F1200;
+G1 X49.146 Y9.957 Z0 F1200;
+G1 X49.397 Y9.668 Z0 F1200;
+G1 X49.607 Y9.362 Z0 F1200;
+G1 X49.775 Y9.041 Z0 F1200;
+G1 X49.898 Y8.705 Z0 F1200;
+G1 X49.974 Y8.358 Z0 F1200;
+G1 X50 Y8 Z0 F1200;
+G1 X49.974 Y7.642 Z0 F1200;
+G1 X49.898 Y7.295 Z0 F1200;
+G1 X49.775 Y6.959 Z0 F1200;
+G1 X49.607 Y6.638 Z0 F1200;
+G1 X49.397 Y6.332 Z0 F1200;
+G1 X49.146 Y6.043 Z0 F1200;
+G1 X48.858 Y5.774 Z0 F1200;
+G1 X48.536 Y5.525 Z0 F1200;
+G1 X48.18 Y5.299 Z0 F1200;
+G1 X47.796 Y5.098 Z0 F1200;
+G1 X47.383 Y4.922 Z0 F1200;
+G1 X46.946 Y4.775 Z0 F1200;
+G1 X46.487 Y4.657 Z0 F1200;
+G1 X46.008 Y4.571 Z0 F1200;
+G1 X45.511 Y4.518 Z0 F1200;
+G1 X45 Y4.5 Z0 F1200;
+G1 X44.489 Y4.518 Z0 F1200;
+G1 X43.992 Y4.571 Z0 F1200;
+G1 X43.513 Y4.657 Z0 F1200;
+G1 X43.054 Y4.775 Z0 F1200;
+G1 X42.617 Y4.922 Z0 F1200;
+G1 X42.204 Y5.098 Z0 F1200;
+G1 X41.82 Y5.299 Z0 F1200;
+G1 X41.464 Y5.525 Z0 F1200;
+G1 X41.142 Y5.774 Z0 F1200;
+G1 X40.854 Y6.043 Z0 F1200;
+G1 X40.603 Y6.332 Z0 F1200;
+G1 X40.393 Y6.638 Z0 F1200;
+G1 X40.225 Y6.959 Z0 F1200;
+G1 Z7 F800;
+G1 X34 Y8 Z1 F1200;
+G1 X24 Y18 Z8 F500;
+G1 F1200;</textarea>
+            </div>
+          </div>
+      </div>
+      </details>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Work Area:</label>
+          <span style="color:#00e5ff; font-weight:bold; align-self:center;">150mm x 140mm</span>
+        </div>
+      </div>
+
+      <button onclick="generate()">Generate G-code</button>
+      <div id="console" class="console-output"></div>
+
+      <!-- Action Buttons -->
+      <div style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;">
+        <button id="upRunBtn"
+          style="background: linear-gradient(90deg, #a855f7, #22c55e); color: white; display: none; flex: 1; margin-top: 0; min-width: 140px;"
+          onclick="uploadAndRun()" title="Upload AND Run in one click">🚀 Upload & Run</button>
+        <button id="uploadBtn" style="background: #a855f7; color: white; display: none; flex: 1; margin-top: 0;"
+          onclick="uploadOnly()" title="Upload the G-code to the controller's SD card">Upload</button>
+        <button id="runBtn" style="background: #22c55e; color: white; display: none; flex: 1; margin-top: 0;"
+          onclick="runGcodeOnly()" title="Run the last uploaded file on the machine">Run</button>
+        <button id="testBtn" style="background: #f97316; color: white; display: none; flex: 1; margin-top: 0;"
+          onclick="testWiggle()" title="Move Z axis up/down 3mm to test connection">Test</button>
+      </div>
+      <div id="status"></div>
+    </div>
+
+    <div class="preview-item">
+      <h4>Plotter Path Preview</h4>
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <textarea id="gcodeOutput" readonly placeholder="G-code will appear here..."></textarea>
+    <div style="display: flex; gap: 10px; margin-top: 20px;">
+      <button id="downloadBtn" style="background: #22c55e; color: white; display: none; flex: 1; margin-top: 0;"
+        onclick="downloadGcode()">Download .gcode</button>
+      <button id="copyBtn" style="background: #3b82f6; color: white; display: none; flex: 1; margin-top: 0;"
+        onclick="copyGcode()">Copy to Clipboard</button>
+    </div>
+  </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+
+</html>
