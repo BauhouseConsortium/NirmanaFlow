@@ -171,7 +171,8 @@ export function Preview({
     canvas.height = height * dpr;
     ctx.scale(dpr, dpr);
 
-    ctx.fillStyle = '#ffffff';
+    // Fill entire canvas with machine bed background
+    ctx.fillStyle = '#334155'; // slate-700 - represents the machine bed
     ctx.fillRect(0, 0, width, height);
 
     const padding = 10;
@@ -184,28 +185,42 @@ export function Preview({
     const offsetX = padding;
     const offsetY = padding;
 
-    // Draw grid
-    ctx.strokeStyle = '#f1f5f9';
+    // Calculate paper dimensions
+    const paperWidth = workWidth * scale;
+    const paperHeight = workHeight * scale;
+
+    // Draw paper area (white background)
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(offsetX, offsetY, paperWidth, paperHeight);
+
+    // Draw paper shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fillRect(offsetX + 3, offsetY + paperHeight, paperWidth, 3);
+    ctx.fillRect(offsetX + paperWidth, offsetY + 3, 3, paperHeight);
+
+    // Draw grid on paper
+    ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 0.5;
 
     const gridSize = 10;
     for (let gx = 0; gx <= workWidth; gx += gridSize) {
       ctx.beginPath();
       ctx.moveTo(offsetX + gx * scale, offsetY);
-      ctx.lineTo(offsetX + gx * scale, offsetY + workHeight * scale);
+      ctx.lineTo(offsetX + gx * scale, offsetY + paperHeight);
       ctx.stroke();
     }
 
     for (let gy = 0; gy <= workHeight; gy += gridSize) {
       ctx.beginPath();
       ctx.moveTo(offsetX, offsetY + gy * scale);
-      ctx.lineTo(offsetX + workWidth * scale, offsetY + gy * scale);
+      ctx.lineTo(offsetX + paperWidth, offsetY + gy * scale);
       ctx.stroke();
     }
 
-    ctx.strokeStyle = '#cbd5e1';
+    // Paper border
+    ctx.strokeStyle = '#94a3b8';
     ctx.lineWidth = 1;
-    ctx.strokeRect(offsetX, offsetY, workWidth * scale, workHeight * scale);
+    ctx.strokeRect(offsetX, offsetY, paperWidth, paperHeight);
 
     // Parse moves if not provided
     const { moves: parsedMoves } = moves ? { moves } : parseGCodeToMoves(gcodeLines);
@@ -545,7 +560,7 @@ export function Preview({
         </div>
       )}
 
-      <div ref={containerRef} className="bg-white rounded-lg overflow-hidden shadow-inner">
+      <div ref={containerRef} className="bg-slate-700 rounded-lg overflow-hidden border border-slate-600">
         <canvas
           ref={canvasRef}
           style={{ width: dimensions.width, height: dimensions.height }}
