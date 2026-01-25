@@ -5,8 +5,10 @@ import { Preview } from './components/Preview';
 import { GCodeOutput } from './components/GCodeOutput';
 import { Console } from './components/Console';
 import { Controls } from './components/Controls';
+import { ConnectionIndicator } from './components/ConnectionIndicator';
 import { useSettings } from './hooks/useSettings';
 import { useConsole } from './hooks/useConsole';
+import { useFluidNC } from './hooks/useFluidNC';
 import { generateGCode } from './utils/gcodeGenerator';
 import { transliterateToba, isBatakScript } from './utils/transliteration';
 import { uploadGCode, runGCode, uploadAndRun, testConnection } from './utils/hardware';
@@ -21,6 +23,11 @@ export default function App() {
 
   const { settings, updateSetting, resetSettings } = useSettings();
   const { logs, log, clear } = useConsole();
+  const fluidNC = useFluidNC(settings.controllerHost, {
+    autoConnect: false,
+    autoReconnect: true,
+    reconnectInterval: 5000,
+  });
 
   // Update Batak preview when input changes
   useEffect(() => {
@@ -31,6 +38,24 @@ export default function App() {
       setBatakPreview('');
     }
   }, [inputText]);
+
+  // Log FluidNC connection state changes
+  useEffect(() => {
+    const { connectionState, machineState, lastError } = fluidNC.status;
+
+    if (connectionState === 'connected') {
+      log(`WebSocket connected to ${settings.controllerHost}:81`, 'success');
+      if (machineState !== 'Unknown') {
+        log(`Machine state: ${machineState}`, 'info');
+      }
+    } else if (connectionState === 'connecting') {
+      log(`Connecting to ${settings.controllerHost}:81...`, 'info');
+    } else if (connectionState === 'error' && lastError) {
+      log(`Connection error: ${lastError}`, 'error');
+    } else if (connectionState === 'disconnected' && lastError === null) {
+      // Only log if it was a manual disconnect (not initial state)
+    }
+  }, [fluidNC.status.connectionState, fluidNC.status.machineState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerate = useCallback(() => {
     clear();
@@ -165,9 +190,19 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold">Surat Batak</h1>
-            <span className="text-xs text-slate-500">Batak Script G-Code Generator</span>
+            <span className="text-xs text-slate-500 hidden sm:inline">Batak Script G-Code Generator</span>
           </div>
-          <span className="px-2 py-0.5 text-xs bg-slate-800 text-slate-500 rounded">v2.0</span>
+          <div className="flex items-center gap-3">
+            <ConnectionIndicator
+              connectionState={fluidNC.status.connectionState}
+              machineState={fluidNC.status.machineState}
+              position={fluidNC.status.position}
+              host={settings.controllerHost}
+              onConnect={fluidNC.connect}
+              onDisconnect={fluidNC.disconnect}
+            />
+            <span className="px-2 py-0.5 text-xs bg-slate-800 text-slate-500 rounded">v2.0</span>
+          </div>
         </div>
       </header>
 
