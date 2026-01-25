@@ -181,7 +181,8 @@ export function generateGCode(inputText: string, settings: Settings): GeneratedG
   // Generate G-code
   const lines: string[] = [];
 
-  // Header - Note: removed '%' delimiters as they can cause FluidNC to parse incorrectly
+  // Header (matching reference)
+  lines.push('%');
   lines.push('(Batak Skeleton Assembler Output)');
   lines.push('G21 G90');
   lines.push(`G0 Z${safeZ}`);
@@ -267,9 +268,10 @@ export function generateGCode(inputText: string, settings: Settings): GeneratedG
     }
   }
 
-  // End sequence - park position and program end
+  // End sequence - park position and program end (matching reference)
   lines.push('G0 X10 Y130');
   lines.push('M30');
+  lines.push('%');
 
   return {
     gcode: lines.join('\n'),

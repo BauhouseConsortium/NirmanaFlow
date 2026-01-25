@@ -5,8 +5,8 @@ export class BacklashFixer {
   private cy: number = 0;
   private ox: number = 0;
   private oy: number = 0;
-  private dx: number = 0; // 1 = positive, -1 = negative, 0 = neutral
-  private dy: number = 0;
+  private dx: number = 1; // 1 = positive, -1 = negative (start positive like reference)
+  private dy: number = 1;
 
   constructor(bx: number, by: number) {
     this.bx = bx;
@@ -15,44 +15,51 @@ export class BacklashFixer {
 
   process(targetX: number, targetY: number, isG0: boolean, feed: number): string[] {
     const commands: string[] = [];
+    const dx = targetX - this.cx;
+    const dy = targetY - this.cy;
+    const thres = 0.05; // Tighter threshold (matching reference)
 
-    if (this.bx === 0 && this.by === 0) {
-      // No backlash compensation needed
-      const cmd = isG0 ? 'G0' : 'G1';
-      const feedStr = isG0 ? '' : ` F${feed}`;
-      commands.push(`${cmd} X${targetX.toFixed(3)} Y${targetY.toFixed(3)}${feedStr}`);
-      this.cx = targetX;
-      this.cy = targetY;
-      return commands;
+    let backlashTriggered = false;
+
+    // X Axis
+    if (Math.abs(dx) > thres) {
+      const ndx = dx > 0 ? 1 : -1;
+      if (this.dx !== 0 && ndx !== this.dx) {
+        const shift = ndx === 1 ? this.bx : -this.bx;
+        this.ox += shift; // Accumulate offset (matching reference)
+        backlashTriggered = true;
+      }
+      this.dx = ndx;
     }
 
-    // Calculate direction
-    const newDx = targetX > this.cx ? 1 : targetX < this.cx ? -1 : this.dx;
-    const newDy = targetY > this.cy ? 1 : targetY < this.cy ? -1 : this.dy;
-
-    // Check for direction reversal on X
-    if (this.dx !== 0 && newDx !== 0 && this.dx !== newDx) {
-      this.ox = newDx * this.bx;
-      // Insert compensation move
-      commands.push(`G0 X${(this.cx + this.ox).toFixed(3)} Y${(this.cy + this.oy).toFixed(3)}`);
+    // Y Axis
+    if (Math.abs(dy) > thres) {
+      const ndy = dy > 0 ? 1 : -1;
+      if (this.dy !== 0 && ndy !== this.dy) {
+        const shift = ndy === 1 ? this.by : -this.by;
+        this.oy += shift; // Accumulate offset (matching reference)
+        backlashTriggered = true;
+      }
+      this.dy = ndy;
     }
 
-    // Check for direction reversal on Y
-    if (this.dy !== 0 && newDy !== 0 && this.dy !== newDy) {
-      this.oy = newDy * this.by;
-      // Insert compensation move
-      commands.push(`G0 X${(this.cx + this.ox).toFixed(3)} Y${(this.cy + this.oy).toFixed(3)}`);
+    // If backlash compensation occurred (offset changed), insert a rapid move
+    // to the CURRENT position but with the NEW offset.
+    // This "takes up the slack" before the actual move begins.
+    if (backlashTriggered) {
+      const preX = this.cx + this.ox;
+      const preY = this.cy + this.oy;
+      commands.push(`G0 X${preX.toFixed(3)} Y${preY.toFixed(3)} ; Backlash Fix`);
     }
 
-    // Main move with offset
+    const fx = targetX + this.ox;
+    const fy = targetY + this.oy;
     const cmd = isG0 ? 'G0' : 'G1';
     const feedStr = isG0 ? '' : ` F${feed}`;
-    commands.push(`${cmd} X${(targetX + this.ox).toFixed(3)} Y${(targetY + this.oy).toFixed(3)}${feedStr}`);
+    commands.push(`${cmd} X${fx.toFixed(3)} Y${fy.toFixed(3)}${feedStr}`);
 
     this.cx = targetX;
     this.cy = targetY;
-    this.dx = newDx;
-    this.dy = newDy;
 
     return commands;
   }
@@ -62,7 +69,7 @@ export class BacklashFixer {
     this.cy = 0;
     this.ox = 0;
     this.oy = 0;
-    this.dx = 0;
-    this.dy = 0;
+    this.dx = 1;
+    this.dy = 1;
   }
 }
