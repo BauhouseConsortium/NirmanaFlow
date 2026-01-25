@@ -5,37 +5,37 @@ export interface HardwareResult {
 }
 
 function sanitizeFilename(text: string): string {
-  return text
-    .substring(0, 20)
-    .replace(/[^a-zA-Z0-9]/g, '_')
-    .replace(/_+/g, '_')
-    .toLowerCase();
+  return (text
+    .replace(/[^a-zA-Z0-9]/gi, '_')
+    .toLowerCase() || 'output') + '-batak.gcode';
 }
 
 async function sendCommand(baseUrl: string, command: string): Promise<HardwareResult> {
-  try {
-    const url = `${baseUrl}/command?cmd=${encodeURIComponent(command)}`;
+  const cmdUrl = `${baseUrl}/command?cmd=${encodeURIComponent(command)}`;
 
-    // Try normal fetch first
-    try {
-      const response = await fetch(url, { mode: 'cors' });
-      if (response.ok) {
-        return { success: true, message: await response.text() };
-      }
-      return { success: false, message: `Error: ${response.status}` };
-    } catch {
-      // CORS blocked - try no-cors (blind mode)
-      await fetch(url, { mode: 'no-cors' });
+  try {
+    // Use no-cors directly like reference - avoids double-send issue
+    const response = await fetch(cmdUrl, { method: 'GET', mode: 'no-cors' });
+
+    // In no-cors mode, response is opaque but request was sent
+    const cleanCmd = command.length > 20 ? command.substring(0, 20) + '...' : command;
+    return {
+      success: true,
+      message: `Cmd '${cleanCmd}' sent (Blind mode).`,
+      blindMode: true,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    if (message.includes('Failed to fetch')) {
       return {
         success: true,
-        message: 'Command sent (blind mode - CORS blocked response)',
+        message: 'Command sent (CORS blocked response, action likely succeeded)',
         blindMode: true,
       };
     }
-  } catch (error) {
     return {
       success: false,
-      message: `Network error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      message: `Network error: ${message}`,
     };
   }
 }
@@ -45,47 +45,44 @@ export async function uploadGCode(
   gcode: string,
   inputText: string
 ): Promise<HardwareResult> {
-  const filename = `${sanitizeFilename(inputText)}_batak.gcode`;
+  const filename = sanitizeFilename(inputText);
+
+  const blob = new Blob([gcode], { type: 'text/plain' });
+  const formData = new FormData();
+  formData.append('path', '/');
+  formData.append('myfile', blob, filename);
 
   try {
-    const formData = new FormData();
-    const blob = new Blob([gcode], { type: 'text/plain' });
-    formData.append('file', blob, filename);
+    // Use no-cors directly like reference - avoids double-send issue
+    await fetch(`${baseUrl}/upload`, {
+      method: 'POST',
+      body: formData,
+      mode: 'no-cors',
+    });
 
-    try {
-      const response = await fetch(`${baseUrl}/upload`, {
-        method: 'POST',
-        body: formData,
-        mode: 'cors',
-      });
-
-      if (response.ok) {
-        return { success: true, message: `Uploaded: ${filename}` };
-      }
-      return { success: false, message: `Upload failed: ${response.status}` };
-    } catch {
-      // Try no-cors
-      await fetch(`${baseUrl}/upload`, {
-        method: 'POST',
-        body: formData,
-        mode: 'no-cors',
-      });
+    return {
+      success: true,
+      message: `Upload initiated: ${filename} (Response opaque in local mode)`,
+      blindMode: true,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    if (message.includes('Failed to fetch')) {
       return {
         success: true,
-        message: `Uploaded: ${filename} (blind mode)`,
+        message: `Upload likely succeeded: ${filename} (CORS blocked response)`,
         blindMode: true,
       };
     }
-  } catch (error) {
     return {
       success: false,
-      message: `Upload error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      message: `Upload error: ${message}`,
     };
   }
 }
 
 export async function runGCode(baseUrl: string, inputText: string): Promise<HardwareResult> {
-  const filename = `${sanitizeFilename(inputText)}_batak.gcode`;
+  const filename = sanitizeFilename(inputText);
   return sendCommand(baseUrl, `$SD/Run=/${filename}`);
 }
 
@@ -99,7 +96,7 @@ export async function uploadAndRun(
     return uploadResult;
   }
 
-  // Wait for file to be written
+  // Wait for SD sync (matching reference)
   await new Promise(resolve => setTimeout(resolve, 2000));
 
   const runResult = await runGCode(baseUrl, inputText);

@@ -89,7 +89,7 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
   const pendingOkCountRef = useRef(0);
   const streamingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const sendNextRef = useRef<(() => void) | null>(null);
-  const maxPendingOks = 4; // Buffer size - send up to 4 commands ahead
+  const maxPendingOks = 1; // Conservative: wait for ok before sending next (safer for FluidNC)
 
   // Parse FluidNC status message
   const parseStatusMessage = useCallback((data: string) => {
@@ -191,11 +191,6 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
         const lines = data.split('\n').map((l: string) => l.trim()).filter(Boolean);
 
         for (const line of lines) {
-          // Debug: log all non-status messages during streaming
-          if (streamingActiveRef.current && !line.startsWith('<')) {
-            console.log('[FluidNC] Received:', JSON.stringify(line), 'pendingOk:', pendingOkCountRef.current);
-          }
-
           // Check for status report: <State|...>
           if (line.startsWith('<') && line.includes('|')) {
             parseStatusMessage(line);
@@ -215,11 +210,12 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
             // ok response - critical for streaming flow control
             setStatus(prev => ({ ...prev, lastMessage: line }));
             if (streamingActiveRef.current) {
-              console.log('[FluidNC] Got OK, calling sendNext. Before:', pendingOkCountRef.current);
               pendingOkCountRef.current = Math.max(0, pendingOkCountRef.current - 1);
               sendNextRef.current?.();
-              console.log('[FluidNC] After sendNext. pendingOk:', pendingOkCountRef.current);
             }
+          } else if (line.startsWith('CURRENT_ID:') || line.startsWith('ACTIVE_ID:')) {
+            // FluidNC connection handshake messages - ignore for flow control
+            setStatus(prev => ({ ...prev, lastMessage: line }));
           } else if (line.startsWith('[') || line.startsWith('$')) {
             // info messages or settings
             setStatus(prev => ({ ...prev, lastMessage: line }));

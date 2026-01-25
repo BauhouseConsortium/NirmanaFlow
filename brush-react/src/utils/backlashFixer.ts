@@ -49,7 +49,7 @@ export class BacklashFixer {
     if (backlashTriggered) {
       const preX = this.cx + this.ox;
       const preY = this.cy + this.oy;
-      commands.push(`G0 X${preX.toFixed(3)} Y${preY.toFixed(3)} ; Backlash Fix`);
+      commands.push(`G0 X${preX.toFixed(3)} Y${preY.toFixed(3)}`);
     }
 
     const fx = targetX + this.ox;
