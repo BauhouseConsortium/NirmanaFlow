@@ -3,13 +3,7 @@ import { glyphs } from '../data/glyphs';
 import { transliterateToba, isBatakScript } from './transliteration';
 import { getPathLength, optimizePaths } from './pathOptimizer';
 import { BacklashFixer } from './backlashFixer';
-
-const DEFAULT_DIP_SEQUENCE = `; Dip sequence
-G0 X{dipX} Y{dipY}
-G1 Z0 F500
-G4 P0.5
-G0 Z{safeZ}
-`;
+import { WIGGLE_DIP_SEQUENCE, processDipSequence } from './gcodeDipLogic';
 
 interface ProcessedPath {
   points: Point[];
@@ -40,14 +34,18 @@ export function generateGCode(inputText: string, settings: Settings): GeneratedG
     customDipSequence,
   } = settings;
 
+  // Reference baseline advance for mark positioning (from original implementation)
+  const REF_BASE_ADV = 478.2 / 600.0;
+
   // Convert to Batak if Latin input
   const text = isBatakScript(inputText) ? inputText : transliterateToba(inputText);
 
   // Collect all paths with their positions
   const allPaths: ProcessedPath[] = [];
   let cursorX = 0;
+  let lastBaseOriginX = 0;  // Track where last base character started
+  let lastBaseAdvance = 0;  // Advance width of last base character
   let artefactsRemoved = 0;
-  let lastBaseWidth = 0;
   let markShiftX = 0;
 
   for (let i = 0; i < text.length; i++) {
@@ -55,11 +53,11 @@ export function generateGCode(inputText: string, settings: Settings): GeneratedG
 
     if (char === ' ') {
       cursorX += 0.5;
-      lastBaseWidth = 0;
+      lastBaseOriginX = cursorX;
+      lastBaseAdvance = 0.5;
       markShiftX = 0;
       continue;
     }
-
     if (char === '\n') {
       continue;
     }
@@ -75,40 +73,76 @@ export function generateGCode(inputText: string, settings: Settings): GeneratedG
     artefactsRemoved += glyph.paths.length - filteredPaths.length;
     const optimized = optimizePaths(filteredPaths);
 
-    // Handle mark positioning
-    let offsetForMark = 0;
-    if (glyph.is_mark) {
-      if (glyph.anchor?.mode === 'center') {
-        const markWidth = Math.max(...optimized.flat().map(p => p[0])) - Math.min(...optimized.flat().map(p => p[0]));
-        offsetForMark = (lastBaseWidth - markWidth) / 2 + markShiftX;
-      } else if (glyph.anchor?.mode === 'right') {
-        offsetForMark = lastBaseWidth + markShiftX;
-      }
-      markShiftX += glyph.anchor?.dx || 0;
-    }
+    // Calculate drawing X position
+    let drawX = cursorX;
 
     // Handle pangolat (U+1BF2) special positioning
     if (char === '\u1BF2') {
-      cursorX -= 0.85;
+      drawX -= 0.85;
     }
 
-    // Add paths to collection
+    // Handle mark positioning (except pangolat which has its own logic)
+    if (glyph.is_mark && char !== '\u1BF2') {
+      const mode = glyph.anchor?.mode || 'center';
+
+      if (mode === 'right') {
+        const shift = lastBaseAdvance - REF_BASE_ADV;
+        drawX = lastBaseOriginX + shift;
+      } else {
+        // center mode (default)
+        const shift = (lastBaseAdvance / 2) - (REF_BASE_ADV / 2);
+        drawX = lastBaseOriginX + shift;
+      }
+    }
+
+    // Add paths to collection (reference uses just drawX, not drawX + markShiftX)
     for (const path of optimized) {
       const translatedPoints: Point[] = path.map(([x, y]) => [
-        x + cursorX + offsetForMark,
+        x + drawX,
         y,
       ]);
       allPaths.push({
         points: translatedPoints,
-        absoluteX: cursorX + offsetForMark,
+        absoluteX: drawX,
       });
     }
 
-    // Update cursor position
-    if (!glyph.is_mark) {
-      lastBaseWidth = glyph.advance;
+    // Update cursor and tracking variables
+    if (!glyph.is_mark || char === '\u1BF2') {
+      // Base character or pangolat
       markShiftX = 0;
+      lastBaseOriginX = cursorX;
+      lastBaseAdvance = glyph.advance;
       cursorX += glyph.advance + kerning;
+    } else {
+      // Mark character (not pangolat) - handle stacking
+      // Apply current shift to drawX for path generation (already done above)
+      drawX += markShiftX;
+
+      // Calculate this mark's width for NEXT mark
+      let mMin = Infinity, mMax = -Infinity;
+      for (const p of glyph.paths) {
+        for (const pt of p) {
+          mMin = Math.min(mMin, pt[0]);
+          mMax = Math.max(mMax, pt[0]);
+        }
+      }
+      const mWidth = (mMax > mMin) ? (mMax - mMin) : 0;
+
+      // Increment shift for NEXT mark
+      markShiftX += (mWidth > 0 ? mWidth : 0.4) + 0.5;
+
+      // If mark has advance (spacing), add it
+      if (glyph.advance > 0) {
+        cursorX += glyph.advance;
+      }
+
+      // AUTO-SPACING: If this mark extends BEYOND the current cursorX,
+      // push cursorX to accommodate it (ensures next base starts after mark)
+      const markRightEdge = drawX + mMax;
+      if (markRightEdge > cursorX) {
+        cursorX = markRightEdge - 0.1;
+      }
     }
   }
 
@@ -146,10 +180,10 @@ export function generateGCode(inputText: string, settings: Settings): GeneratedG
 
   // Generate G-code
   const lines: string[] = [];
-  lines.push('%');
-  lines.push(`; Batak Script G-code`);
-  lines.push(`; Input: ${inputText.substring(0, 30)}${inputText.length > 30 ? '...' : ''}`);
-  lines.push('G21 G90 ; mm, absolute');
+
+  // Header - Note: removed '%' delimiters as they can cause FluidNC to parse incorrectly
+  lines.push('(Batak Skeleton Assembler Output)');
+  lines.push('G21 G90');
   lines.push(`G0 Z${safeZ}`);
 
   const backlash = new BacklashFixer(backlashX, backlashY);
@@ -157,66 +191,85 @@ export function generateGCode(inputText: string, settings: Settings): GeneratedG
   let dipCount = 0;
   let lastPoint: Point | null = null;
 
-  // Generate dip sequence G-code
+  // Generate dip sequence G-code using new shift logic
   const generateDipSequence = (): string[] => {
-    const template = customDipSequence || DEFAULT_DIP_SEQUENCE;
-    const sequence = template
-      .replace(/\{dipX\}/g, dipX.toString())
-      .replace(/\{dipY\}/g, dipY.toString())
-      .replace(/\{safeZ\}/g, safeZ.toString());
-    return sequence.split('\n').filter(line => line.trim());
+    const template = customDipSequence || WIGGLE_DIP_SEQUENCE;
+    return processDipSequence(template, dipX, dipY);
   };
 
   // Initial dip (if not continuous plot)
-  if (!continuousPlot && dipInterval > 0) {
-    lines.push('; Initial dip');
-    lines.push(...generateDipSequence());
+  if (!continuousPlot) { // Note: Reference logic has simple (!isPlotter) check, implicitly always dips at start if not plotter
     dipCount++;
+    lines.push(`(Initial Dip #${dipCount})`);
+
+    // Check if we have a sequence to use
+    const template = customDipSequence || WIGGLE_DIP_SEQUENCE;
+    if (template && template.trim().length > 0) {
+      lines.push(...generateDipSequence());
+    } else {
+      // Fallback default from reference if somehow WIGGLE is cleared but custom is empty (unlikely with this code structure but for safety)
+      // This is the only place G4 would appear, matching reference "else" block.
+      // However, processDipSequence handles empty logic too.
+      // If we really wanted to match the "G4 fallback" of the reference when textarea is empty:
+      lines.push(`G0 Z${safeZ}`);
+      lines.push(`G0 X${dipX} Y${dipY}`);
+      lines.push(`G1 Z-2 F500`);
+      lines.push("G4 P500");
+      lines.push(`G0 Z${safeZ}`);
+    }
+
+    // Return to safe Z
+    lines.push(`G0 Z${safeZ}`);
   }
 
   // Process each path
   for (const { points } of allPaths) {
     if (points.length === 0) continue;
 
-    // Transform all points
     const transformedPoints = points.map(transform);
 
-    // First point: rapid move, then pen down
-    const [startX, startY] = transformedPoints[0];
+    let first = true;
+    for (const [tx, ty] of transformedPoints) {
+      // Calc distance for dipping
+      if (!first && lastPoint) {
+        distanceAccumulator += distance(lastPoint, [tx, ty]);
+      }
 
-    // Check if we need to dip
-    if (lastPoint && !continuousPlot && dipInterval > 0) {
-      distanceAccumulator += distance(lastPoint, [startX, startY]);
-      if (distanceAccumulator > dipInterval) {
-        lines.push(`G0 Z${safeZ}`);
+      if (first) {
+        lines.push(...backlash.process(tx, ty, true, feedRate));
+        lines.push('G1 Z0 F500');
+        first = false;
+      } else {
+        lines.push(...backlash.process(tx, ty, false, feedRate));
+      }
+      lastPoint = [tx, ty];
+    }
+    lines.push(`G0 Z${safeZ}`);
+
+    // Check dip AFTER stroke is complete
+    if (!continuousPlot && distanceAccumulator > dipInterval) {
+      dipCount++;
+      lines.push(`(Dip #${dipCount} at dist ${distanceAccumulator.toFixed(1)} after stroke)`);
+
+      const template = customDipSequence || WIGGLE_DIP_SEQUENCE;
+      if (template && template.trim().length > 0) {
         lines.push(...generateDipSequence());
-        dipCount++;
-        distanceAccumulator = 0;
+      } else {
+        // Fallback G4 logic
+        lines.push(`G0 Z${safeZ}`);
+        lines.push(`G0 X${dipX} Y${dipY}`);
+        lines.push(`G1 Z-2 F500`);
+        lines.push("G4 P500");
+        lines.push(`G0 Z${safeZ}`);
       }
+
+      distanceAccumulator = 0;
     }
-
-    lines.push(...backlash.process(startX, startY, true, feedRate));
-    lines.push('G1 Z0 F500 ; pen down');
-
-    // Subsequent points: feed moves
-    for (let i = 1; i < transformedPoints.length; i++) {
-      const [x, y] = transformedPoints[i];
-      lines.push(...backlash.process(x, y, false, feedRate));
-
-      if (!continuousPlot && dipInterval > 0) {
-        distanceAccumulator += distance(transformedPoints[i - 1], transformedPoints[i]);
-      }
-    }
-
-    // Pen up
-    lines.push(`G0 Z${safeZ} ; pen up`);
-    lastPoint = transformedPoints[transformedPoints.length - 1];
   }
 
-  // End sequence
-  lines.push('G0 X10 Y130 ; park');
-  lines.push('M30 ; end');
-  lines.push('%');
+  // End sequence - park position and program end
+  lines.push('G0 X10 Y130');
+  lines.push('M30');
 
   return {
     gcode: lines.join('\n'),

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type MachineState = 'Idle' | 'Run' | 'Hold' | 'Alarm' | 'Check' | 'Home' | 'Sleep' | 'Unknown';
+export type StreamingState = 'idle' | 'streaming' | 'paused' | 'completed' | 'error';
 
 export interface MachinePosition {
   x: number;
@@ -24,6 +25,17 @@ export interface FluidNCStatus {
   lastError: string | null;
 }
 
+export interface StreamingProgress {
+  state: StreamingState;
+  currentLine: number;
+  totalLines: number;
+  percentage: number;
+  currentCommand: string;
+  startTime: number | null;
+  elapsedTime: number;
+  errors: string[];
+}
+
 const INITIAL_STATUS: FluidNCStatus = {
   connectionState: 'disconnected',
   machineState: 'Unknown',
@@ -32,6 +44,17 @@ const INITIAL_STATUS: FluidNCStatus = {
   spindleSpeed: 0,
   lastMessage: '',
   lastError: null,
+};
+
+const INITIAL_STREAMING: StreamingProgress = {
+  state: 'idle',
+  currentLine: 0,
+  totalLines: 0,
+  percentage: 0,
+  currentCommand: '',
+  startTime: null,
+  elapsedTime: 0,
+  errors: [],
 };
 
 export interface UseFluidNCOptions {
@@ -52,9 +75,21 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
   } = options;
 
   const [status, setStatus] = useState<FluidNCStatus>(INITIAL_STATUS);
+  const [streaming, setStreaming] = useState<StreamingProgress>(INITIAL_STREAMING);
+
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isManualDisconnect = useRef(false);
+
+  // Streaming refs
+  const streamingLinesRef = useRef<string[]>([]);
+  const streamingIndexRef = useRef(0);
+  const streamingPausedRef = useRef(false);
+  const streamingActiveRef = useRef(false);
+  const pendingOkCountRef = useRef(0);
+  const streamingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const sendNextRef = useRef<(() => void) | null>(null);
+  const maxPendingOks = 4; // Buffer size - send up to 4 commands ahead
 
   // Parse FluidNC status message
   const parseStatusMessage = useCallback((data: string) => {
@@ -125,6 +160,9 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
     try {
       const ws = new WebSocket(wsUrl);
 
+      // Prefer text messages
+      ws.binaryType = 'blob';
+
       ws.onopen = () => {
         setStatus(prev => ({ ...prev, connectionState: 'connected', lastError: null }));
 
@@ -137,21 +175,53 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
         ws.send('?');
       };
 
-      ws.onmessage = (event) => {
-        const data = event.data;
+      ws.onmessage = async (event) => {
+        // Handle both string and Blob data
+        let data: string;
+        if (typeof event.data === 'string') {
+          data = event.data;
+        } else if (event.data instanceof Blob) {
+          data = await event.data.text();
+        } else {
+          console.warn('[FluidNC] Unknown message type:', typeof event.data);
+          return;
+        }
 
         // Handle multiline messages - split and process each line
         const lines = data.split('\n').map((l: string) => l.trim()).filter(Boolean);
 
         for (const line of lines) {
+          // Debug: log all non-status messages during streaming
+          if (streamingActiveRef.current && !line.startsWith('<')) {
+            console.log('[FluidNC] Received:', JSON.stringify(line), 'pendingOk:', pendingOkCountRef.current);
+          }
+
           // Check for status report: <State|...>
           if (line.startsWith('<') && line.includes('|')) {
             parseStatusMessage(line);
           } else if (line.startsWith('error:')) {
             // Error message
             setStatus(prev => ({ ...prev, lastError: line, lastMessage: line }));
-          } else if (line === 'ok' || line.startsWith('[') || line.startsWith('$')) {
-            // ok response, info messages, or settings
+            // Handle streaming error
+            if (streamingActiveRef.current) {
+              setStreaming(prev => ({
+                ...prev,
+                errors: [...prev.errors, line],
+              }));
+              pendingOkCountRef.current = Math.max(0, pendingOkCountRef.current - 1);
+              sendNextRef.current?.();
+            }
+          } else if (line === 'ok' || line.toLowerCase() === 'ok') {
+            // ok response - critical for streaming flow control
+            setStatus(prev => ({ ...prev, lastMessage: line }));
+            if (streamingActiveRef.current) {
+              console.log('[FluidNC] Got OK, calling sendNext. Before:', pendingOkCountRef.current);
+              pendingOkCountRef.current = Math.max(0, pendingOkCountRef.current - 1);
+              sendNextRef.current?.();
+              console.log('[FluidNC] After sendNext. pendingOk:', pendingOkCountRef.current);
+            }
+          } else if (line.startsWith('[') || line.startsWith('$')) {
+            // info messages or settings
             setStatus(prev => ({ ...prev, lastMessage: line }));
           } else {
             // Other messages
@@ -281,6 +351,161 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
     return send(`G0 Z${z.toFixed(3)} F${feedRate}`);
   }, [send]);
 
+  // Update elapsed time during streaming
+  const updateStreamingTime = useCallback(() => {
+    setStreaming(prev => {
+      if (prev.startTime && prev.state === 'streaming') {
+        return { ...prev, elapsedTime: Date.now() - prev.startTime };
+      }
+      return prev;
+    });
+  }, []);
+
+  // Send next lines in streaming queue (with buffering)
+  const sendNextStreamingLines = useCallback(() => {
+    if (!streamingActiveRef.current || streamingPausedRef.current) return;
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+
+    const lines = streamingLinesRef.current;
+    const totalLines = lines.length;
+
+    // Send lines while we have buffer space and lines to send
+    while (
+      pendingOkCountRef.current < maxPendingOks &&
+      streamingIndexRef.current < totalLines &&
+      !streamingPausedRef.current
+    ) {
+      const lineIndex = streamingIndexRef.current;
+      const line = lines[lineIndex].trim();
+
+      // Skip empty lines and comments (but still count them for progress)
+      if (line && !line.startsWith(';') && !line.startsWith('(') && line !== '%') {
+        wsRef.current.send(line + '\n');
+        pendingOkCountRef.current++;
+
+        // Update progress
+        setStreaming(prev => ({
+          ...prev,
+          currentLine: lineIndex + 1,
+          percentage: Math.round(((lineIndex + 1) / totalLines) * 100),
+          currentCommand: line,
+        }));
+      } else {
+        // Still update progress for skipped lines
+        setStreaming(prev => ({
+          ...prev,
+          currentLine: lineIndex + 1,
+          percentage: Math.round(((lineIndex + 1) / totalLines) * 100),
+        }));
+      }
+
+      streamingIndexRef.current++;
+    }
+
+    // Check for completion when all lines sent and all oks received
+    if (streamingIndexRef.current >= totalLines && pendingOkCountRef.current === 0) {
+      streamingActiveRef.current = false;
+      if (streamingTimerRef.current) {
+        clearInterval(streamingTimerRef.current);
+        streamingTimerRef.current = null;
+      }
+      setStreaming(prev => ({
+        ...prev,
+        state: 'completed',
+        percentage: 100,
+        currentCommand: 'Complete',
+      }));
+    }
+  }, []);
+
+  // Keep the ref updated so WebSocket callback can call it
+  useEffect(() => {
+    sendNextRef.current = sendNextStreamingLines;
+  }, [sendNextStreamingLines]);
+
+  // Start streaming G-code
+  const startStreaming = useCallback((gcodeLines: string[]): boolean => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      return false;
+    }
+
+    // Filter out empty lines but keep the array for accurate line counting
+    const lines = gcodeLines.filter(line => {
+      const trimmed = line.trim();
+      return trimmed && trimmed !== '%';
+    });
+
+    if (lines.length === 0) return false;
+
+    // Reset streaming state
+    streamingLinesRef.current = lines;
+    streamingIndexRef.current = 0;
+    streamingPausedRef.current = false;
+    streamingActiveRef.current = true;
+    pendingOkCountRef.current = 0;
+
+    setStreaming({
+      state: 'streaming',
+      currentLine: 0,
+      totalLines: lines.length,
+      percentage: 0,
+      currentCommand: 'Starting...',
+      startTime: Date.now(),
+      elapsedTime: 0,
+      errors: [],
+    });
+
+    // Start elapsed time timer
+    if (streamingTimerRef.current) {
+      clearInterval(streamingTimerRef.current);
+    }
+    streamingTimerRef.current = setInterval(updateStreamingTime, 1000);
+
+    // Start sending lines
+    sendNextStreamingLines();
+
+    return true;
+  }, [sendNextStreamingLines, updateStreamingTime]);
+
+  // Pause streaming
+  const pauseStreaming = useCallback(() => {
+    if (!streamingActiveRef.current) return;
+    streamingPausedRef.current = true;
+    setStreaming(prev => ({ ...prev, state: 'paused' }));
+    // Also send feed hold to machine
+    sendRealtime('!');
+  }, [sendRealtime]);
+
+  // Resume streaming
+  const resumeStreaming = useCallback(() => {
+    if (!streamingActiveRef.current || !streamingPausedRef.current) return;
+    streamingPausedRef.current = false;
+    setStreaming(prev => ({ ...prev, state: 'streaming' }));
+    // Resume machine
+    sendRealtime('~');
+    // Continue sending lines
+    sendNextStreamingLines();
+  }, [sendRealtime, sendNextStreamingLines]);
+
+  // Cancel streaming
+  const cancelStreaming = useCallback(() => {
+    streamingActiveRef.current = false;
+    streamingPausedRef.current = false;
+    streamingLinesRef.current = [];
+    streamingIndexRef.current = 0;
+    pendingOkCountRef.current = 0;
+
+    if (streamingTimerRef.current) {
+      clearInterval(streamingTimerRef.current);
+      streamingTimerRef.current = null;
+    }
+
+    setStreaming(INITIAL_STREAMING);
+
+    // Stop the machine
+    sendRealtime('\x18'); // Soft reset
+  }, [sendRealtime]);
+
   // Auto-connect on mount if enabled
   useEffect(() => {
     if (autoConnect) {
@@ -294,6 +519,7 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
 
   return {
     status,
+    streaming,
     connect,
     disconnect,
     send,
@@ -310,6 +536,12 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
     setZero,
     goToZero,
     goToZ,
+    // Streaming methods
+    startStreaming,
+    pauseStreaming,
+    resumeStreaming,
+    cancelStreaming,
     isConnected: status.connectionState === 'connected',
+    isStreaming: streaming.state === 'streaming' || streaming.state === 'paused',
   };
 }

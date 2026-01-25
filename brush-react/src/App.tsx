@@ -7,6 +7,8 @@ import { Console } from './components/Console';
 import { Controls } from './components/Controls';
 import { ConnectionIndicator } from './components/ConnectionIndicator';
 import { JogControl } from './components/JogControl';
+import { StreamingProgress } from './components/StreamingProgress';
+import { MacroPanel } from './components/MacroPanel';
 import { useSettings } from './hooks/useSettings';
 import { useConsole } from './hooks/useConsole';
 import { useFluidNC } from './hooks/useFluidNC';
@@ -42,7 +44,7 @@ export default function App() {
 
   // Log FluidNC connection state changes
   useEffect(() => {
-    const { connectionState, machineState, lastError } = fluidNC.status;
+    const { connectionState, lastError } = fluidNC.status;
 
     if (connectionState === 'connected') {
       log(`WebSocket connected to ${settings.controllerHost}:81`, 'success');
@@ -60,6 +62,22 @@ export default function App() {
       log(`Machine state: ${machineState}`, 'info');
     }
   }, [fluidNC.status.machineState]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Log streaming completion
+  useEffect(() => {
+    const { state, errors } = fluidNC.streaming;
+    if (state === 'completed') {
+      setIsPrinting(false);
+      if (errors.length > 0) {
+        log(`Streaming completed with ${errors.length} errors`, 'warning');
+      } else {
+        log('Streaming completed successfully!', 'success');
+      }
+    } else if (state === 'error') {
+      setIsPrinting(false);
+      log('Streaming failed', 'error');
+    }
+  }, [fluidNC.streaming.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerate = useCallback(() => {
     clear();
@@ -150,6 +168,29 @@ export default function App() {
     log('Printing status cleared', 'info');
   }, [log]);
 
+  // WebSocket streaming handler
+  const handleStream = useCallback(() => {
+    if (!gcodeResult?.lines || gcodeResult.lines.length === 0) {
+      log('No G-code to stream', 'error');
+      return;
+    }
+
+    if (!fluidNC.isConnected) {
+      log('Not connected to FluidNC', 'error');
+      return;
+    }
+
+    log(`Starting WebSocket stream (${gcodeResult.lines.length} lines)...`, 'info');
+    const success = fluidNC.startStreaming(gcodeResult.lines);
+
+    if (success) {
+      setIsPrinting(true);
+      log('Streaming started', 'success');
+    } else {
+      log('Failed to start streaming', 'error');
+    }
+  }, [gcodeResult, fluidNC, log]);
+
   const handleTest = useCallback(async () => {
     setIsLoading(true);
     log('Testing connection...');
@@ -229,11 +270,34 @@ export default function App() {
                 onUpload={handleUpload}
                 onRun={handleRun}
                 onUploadAndRun={handleUploadAndRun}
+                onStream={handleStream}
                 onTest={handleTest}
                 hasGCode={!!gcodeResult?.gcode}
                 isLoading={isLoading}
+                isConnected={fluidNC.isConnected}
+                isStreaming={fluidNC.isStreaming}
               />
             </div>
+
+            {/* Streaming Progress */}
+            {fluidNC.streaming.state !== 'idle' && (
+              <StreamingProgress
+                streaming={fluidNC.streaming}
+                onPause={() => {
+                  fluidNC.pauseStreaming();
+                  log('Streaming paused', 'warning');
+                }}
+                onResume={() => {
+                  fluidNC.resumeStreaming();
+                  log('Streaming resumed', 'info');
+                }}
+                onCancel={() => {
+                  fluidNC.cancelStreaming();
+                  setIsPrinting(false);
+                  log('Streaming cancelled', 'warning');
+                }}
+              />
+            )}
 
             <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
               <JogControl
@@ -268,6 +332,22 @@ export default function App() {
             </div>
 
             <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+              <MacroPanel
+                isConnected={fluidNC.isConnected}
+                isStreaming={fluidNC.isStreaming}
+                onRunMacro={(gcode) => {
+                  log(`Running macro (${gcode.length} commands)...`, 'info');
+                  // Send each line sequentially
+                  gcode.forEach((line, i) => {
+                    setTimeout(() => {
+                      fluidNC.send(line);
+                    }, i * 100); // Small delay between commands
+                  });
+                }}
+              />
+            </div>
+
+            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
               <SettingsPanel
                 settings={settings}
                 onUpdate={updateSetting}
@@ -283,6 +363,8 @@ export default function App() {
                 gcodeLines={gcodeResult?.lines || []}
                 isPrinting={isPrinting}
                 onStopPrinting={handleStopPrinting}
+                machinePosition={fluidNC.status.position}
+                isConnected={fluidNC.isConnected}
               />
             </div>
 

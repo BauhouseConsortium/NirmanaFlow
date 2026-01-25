@@ -1,11 +1,29 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 
+interface MachinePosition {
+  x: number;
+  y: number;
+  z: number;
+}
+
 interface PreviewProps {
   gcodeLines: string[];
   isPrinting?: boolean;
   onStopPrinting?: () => void;
   showTravelMoves?: boolean;
+  machinePosition?: MachinePosition | null;
+  isConnected?: boolean;
 }
+
+interface TrailPoint {
+  x: number;
+  y: number;
+  z: number;
+  timestamp: number;
+}
+
+const TRAIL_MAX_POINTS = 50;
+const TRAIL_MAX_AGE_MS = 5000; // Trail fades over 5 seconds
 
 interface GCodeMove {
   type: 'G0' | 'G1' | 'G4';
@@ -129,11 +147,15 @@ export function Preview({
   gcodeLines,
   isPrinting = false,
   onStopPrinting,
-  showTravelMoves: initialShowTravel = false
+  showTravelMoves: initialShowTravel = false,
+  machinePosition = null,
+  isConnected = false,
 }: PreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
+  const trailRef = useRef<TrailPoint[]>([]);
+  const drawCanvasRef = useRef<((state?: MachineState & { moveIndex: number }, moves?: GCodeMove[]) => void) | null>(null);
   const [dimensions, setDimensions] = useState({ width: 600, height: 300 });
   const [showTravelMoves, setShowTravelMoves] = useState(initialShowTravel);
   const [isSimulating, setIsSimulating] = useState(false);
@@ -156,6 +178,45 @@ export function Preview({
     window.addEventListener('resize', updateSize);
     return () => window.removeEventListener('resize', updateSize);
   }, []);
+
+  // Update trail when machine position changes
+  useEffect(() => {
+    if (!isConnected || !machinePosition) {
+      // Clear trail when disconnected
+      trailRef.current = [];
+      return;
+    }
+
+    const now = Date.now();
+    const trail = trailRef.current;
+
+    // Add new point if position changed significantly
+    const lastPoint = trail[trail.length - 1];
+    const minDistance = 0.5; // mm - minimum distance to add new point
+
+    if (!lastPoint ||
+        Math.abs(machinePosition.x - lastPoint.x) > minDistance ||
+        Math.abs(machinePosition.y - lastPoint.y) > minDistance ||
+        Math.abs(machinePosition.z - lastPoint.z) > minDistance) {
+      trail.push({
+        x: machinePosition.x,
+        y: machinePosition.y,
+        z: machinePosition.z,
+        timestamp: now,
+      });
+    }
+
+    // Remove old points
+    const cutoff = now - TRAIL_MAX_AGE_MS;
+    while (trail.length > 0 && trail[0].timestamp < cutoff) {
+      trail.shift();
+    }
+
+    // Limit trail length
+    while (trail.length > TRAIL_MAX_POINTS) {
+      trail.shift();
+    }
+  }, [machinePosition, isConnected]);
 
   const drawCanvas = useCallback((state?: MachineState & { moveIndex: number }, moves?: GCodeMove[]) => {
     const canvas = canvasRef.current;
@@ -386,7 +447,110 @@ export function Preview({
     ctx.textAlign = 'center';
     ctx.fillText('INK', dipX, dipY - 6);
 
-  }, [gcodeLines, dimensions, showTravelMoves]);
+    // Draw trail for live position - only when connected and not simulating
+    if (isConnected && !state && trailRef.current.length > 1) {
+      const trail = trailRef.current;
+      const now = Date.now();
+
+      // Draw trail segments with fading opacity
+      for (let i = 1; i < trail.length; i++) {
+        const prev = trail[i - 1];
+        const curr = trail[i];
+
+        const age = now - curr.timestamp;
+        const opacity = Math.max(0, 1 - age / TRAIL_MAX_AGE_MS);
+
+        if (opacity <= 0) continue;
+
+        const fromX = offsetX + prev.x * scale;
+        const fromY = offsetY + (workHeight - prev.y) * scale;
+        const toX = offsetX + curr.x * scale;
+        const toY = offsetY + (workHeight - curr.y) * scale;
+
+        const isPenDown = curr.z <= 0.5;
+
+        ctx.beginPath();
+        ctx.moveTo(fromX, fromY);
+        ctx.lineTo(toX, toY);
+
+        if (isPenDown) {
+          // Solid line for pen down (drawing)
+          ctx.strokeStyle = `rgba(6, 182, 212, ${opacity})`; // cyan, full opacity
+          ctx.lineWidth = 4;
+          ctx.setLineDash([]);
+        } else {
+          // Dashed line for pen up (travel)
+          ctx.strokeStyle = `rgba(6, 182, 212, ${opacity * 0.7})`; // cyan
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+        }
+
+        ctx.lineCap = 'round';
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // Draw real machine position (from WebSocket) - only when connected and not simulating
+    if (isConnected && machinePosition && !state) {
+      const realX = offsetX + machinePosition.x * scale;
+      const realY = offsetY + (workHeight - machinePosition.y) * scale;
+      const isPenDown = machinePosition.z <= 0.5;
+
+      // Draw crosshair for real position
+      ctx.strokeStyle = '#06b6d480';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.moveTo(realX, offsetY);
+      ctx.lineTo(realX, offsetY + paperHeight);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(offsetX, realY);
+      ctx.lineTo(offsetX + paperWidth, realY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Outer glow
+      ctx.fillStyle = isPenDown ? '#06b6d440' : '#06b6d420';
+      ctx.beginPath();
+      ctx.arc(realX, realY, 14, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Main circle - cyan color for real position
+      ctx.fillStyle = '#06b6d4';
+      ctx.beginPath();
+      ctx.arc(realX, realY, 8, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Inner dot
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(realX, realY, 2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Label
+      ctx.fillStyle = '#06b6d4';
+      ctx.font = 'bold 9px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('LIVE', realX, realY - 16);
+
+      // Z indicator
+      ctx.fillStyle = isPenDown ? '#ef4444' : '#22c55e';
+      ctx.font = '8px system-ui';
+      ctx.fillText(`Z${machinePosition.z.toFixed(1)}`, realX, realY + 22);
+    }
+
+  }, [gcodeLines, dimensions, showTravelMoves, machinePosition, isConnected]);
+
+  // Keep ref updated with latest drawCanvas function
+  useEffect(() => {
+    drawCanvasRef.current = drawCanvas;
+  }, [drawCanvas]);
 
   // Regular drawing (not simulating)
   useEffect(() => {
@@ -394,7 +558,7 @@ export function Preview({
       drawCanvas();
       setCurrentMoveInfo('');
     }
-  }, [gcodeLines, dimensions, showTravelMoves, isSimulating, drawCanvas]);
+  }, [gcodeLines, dimensions, showTravelMoves, isSimulating, drawCanvas, machinePosition, isConnected]);
 
   // Simulation animation - G-code based timing
   useEffect(() => {
@@ -424,7 +588,7 @@ export function Preview({
       setSimulationProgress(Math.min(simulatedTime / totalTime * 100, 100));
 
       if (simulatedTime >= totalTime) {
-        drawCanvas();
+        drawCanvasRef.current?.();
         setIsSimulating(false);
         setSimulationProgress(100);
         setCurrentMoveInfo('Complete');
@@ -445,7 +609,7 @@ export function Preview({
         }
       }
 
-      drawCanvas(state, moves);
+      drawCanvasRef.current?.(state, moves);
       animationRef.current = requestAnimationFrame(animate);
     };
 
@@ -456,7 +620,7 @@ export function Preview({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isSimulating, gcodeLines, simulationSpeed, drawCanvas]);
+  }, [isSimulating, gcodeLines, simulationSpeed]); // Removed drawCanvas dependency
 
   const startSimulation = () => {
     setSimulationProgress(0);
@@ -465,7 +629,7 @@ export function Preview({
 
   const stopSimulation = () => {
     setIsSimulating(false);
-    drawCanvas();
+    drawCanvasRef.current?.();
   };
 
   return (
@@ -542,6 +706,11 @@ export function Preview({
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-purple-500"></span> Ink
           </span>
+          {isConnected && (
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rounded-full bg-cyan-500 animate-pulse"></span> Live
+            </span>
+          )}
         </div>
       </div>
 
