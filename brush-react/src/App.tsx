@@ -6,6 +6,7 @@ import { GCodeOutput } from './components/GCodeOutput';
 import { Console } from './components/Console';
 import { Controls } from './components/Controls';
 import { ConnectionIndicator } from './components/ConnectionIndicator';
+import { JogControl } from './components/JogControl';
 import { useSettings } from './hooks/useSettings';
 import { useConsole } from './hooks/useConsole';
 import { useFluidNC } from './hooks/useFluidNC';
@@ -45,17 +46,20 @@ export default function App() {
 
     if (connectionState === 'connected') {
       log(`WebSocket connected to ${settings.controllerHost}:81`, 'success');
-      if (machineState !== 'Unknown') {
-        log(`Machine state: ${machineState}`, 'info');
-      }
     } else if (connectionState === 'connecting') {
       log(`Connecting to ${settings.controllerHost}:81...`, 'info');
     } else if (connectionState === 'error' && lastError) {
       log(`Connection error: ${lastError}`, 'error');
-    } else if (connectionState === 'disconnected' && lastError === null) {
-      // Only log if it was a manual disconnect (not initial state)
     }
-  }, [fluidNC.status.connectionState, fluidNC.status.machineState]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fluidNC.status.connectionState]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Log machine state changes
+  useEffect(() => {
+    const { machineState, connectionState } = fluidNC.status;
+    if (connectionState === 'connected' && machineState !== 'Unknown') {
+      log(`Machine state: ${machineState}`, 'info');
+    }
+  }, [fluidNC.status.machineState]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleGenerate = useCallback(() => {
     clear();
@@ -228,6 +232,38 @@ export default function App() {
                 onTest={handleTest}
                 hasGCode={!!gcodeResult?.gcode}
                 isLoading={isLoading}
+              />
+            </div>
+
+            <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700">
+              <JogControl
+                isConnected={fluidNC.isConnected}
+                machineState={fluidNC.status.machineState}
+                position={fluidNC.status.position}
+                onJog={(axis, distance) => {
+                  fluidNC.jog(axis, distance);
+                  log(`Jog ${axis}${distance > 0 ? '+' : ''}${distance}mm`, 'info');
+                }}
+                onHome={() => {
+                  fluidNC.home();
+                  log('Homing all axes...', 'info');
+                }}
+                onUnlock={() => {
+                  fluidNC.unlock();
+                  log('Unlocking machine...', 'warning');
+                }}
+                onSetZero={() => {
+                  fluidNC.setZero();
+                  log('Work position set to zero', 'success');
+                }}
+                onGoToZero={() => {
+                  fluidNC.goToZero();
+                  log('Moving to X0 Y0...', 'info');
+                }}
+                onStop={() => {
+                  fluidNC.stop();
+                  log('Emergency stop!', 'error');
+                }}
               />
             </div>
 

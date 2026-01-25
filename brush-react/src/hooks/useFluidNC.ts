@@ -140,16 +140,22 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
       ws.onmessage = (event) => {
         const data = event.data;
 
-        // Check for status report
-        if (data.startsWith('<') && data.includes('|')) {
-          parseStatusMessage(data);
-        } else {
-          // Other messages (ok, error, etc.)
-          setStatus(prev => ({ ...prev, lastMessage: data }));
+        // Handle multiline messages - split and process each line
+        const lines = data.split('\n').map((l: string) => l.trim()).filter(Boolean);
 
-          // Check for errors
-          if (data.startsWith('error:')) {
-            setStatus(prev => ({ ...prev, lastError: data }));
+        for (const line of lines) {
+          // Check for status report: <State|...>
+          if (line.startsWith('<') && line.includes('|')) {
+            parseStatusMessage(line);
+          } else if (line.startsWith('error:')) {
+            // Error message
+            setStatus(prev => ({ ...prev, lastError: line, lastMessage: line }));
+          } else if (line === 'ok' || line.startsWith('[') || line.startsWith('$')) {
+            // ok response, info messages, or settings
+            setStatus(prev => ({ ...prev, lastMessage: line }));
+          } else {
+            // Other messages
+            setStatus(prev => ({ ...prev, lastMessage: line }));
           }
         }
       };
@@ -241,6 +247,40 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
     return sendRealtime(chars[action]);
   }, [sendRealtime]);
 
+  // Jog control - move axis by distance (relative)
+  const jog = useCallback((axis: 'X' | 'Y' | 'Z', distance: number, feedRate = 1000): boolean => {
+    // Use $J= jog command for safe jogging (can be cancelled)
+    return send(`$J=G91 G21 ${axis}${distance.toFixed(3)} F${feedRate}`);
+  }, [send]);
+
+  // Cancel active jog
+  const jogCancel = useCallback(() => sendRealtime('\x85'), [sendRealtime]);
+
+  // Home all axes
+  const home = useCallback((): boolean => {
+    return send('$H');
+  }, [send]);
+
+  // Unlock after alarm
+  const unlock = useCallback((): boolean => {
+    return send('$X');
+  }, [send]);
+
+  // Set current position as zero (work coordinates)
+  const setZero = useCallback((): boolean => {
+    return send('G10 L20 P1 X0 Y0 Z0');
+  }, [send]);
+
+  // Go to zero position
+  const goToZero = useCallback((feedRate = 1000): boolean => {
+    return send(`G0 X0 Y0 F${feedRate}`);
+  }, [send]);
+
+  // Go to specific Z position
+  const goToZ = useCallback((z: number, feedRate = 500): boolean => {
+    return send(`G0 Z${z.toFixed(3)} F${feedRate}`);
+  }, [send]);
+
   // Auto-connect on mount if enabled
   useEffect(() => {
     if (autoConnect) {
@@ -263,6 +303,13 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
     stop,
     queryStatus,
     feedOverride,
+    jog,
+    jogCancel,
+    home,
+    unlock,
+    setZero,
+    goToZero,
+    goToZ,
     isConnected: status.connectionState === 'connected',
   };
 }
