@@ -33,7 +33,7 @@ import { GlyphEditor } from './GlyphEditor';
 import { CodeEditorModal } from './CodeEditorModal';
 import { nodeDefaults } from './nodeTypes';
 import { executeFlow, FlowExecutionCache, type ExecutionResult } from './flowExecutor';
-import type { Path } from '../../utils/drawingApi';
+import type { ColoredPath } from '../../utils/drawingApi';
 
 // Define custom node types
 const nodeTypes = {
@@ -69,7 +69,7 @@ const initialNodes: Node[] = [
 const initialEdges: Edge[] = [];
 
 interface FlowEditorProps {
-  onChange?: (paths: Path[], result: ExecutionResult) => void;
+  onChange?: (paths: ColoredPath[], result: ExecutionResult) => void;
 }
 
 function FlowEditorInner({ onChange }: FlowEditorProps) {
@@ -281,6 +281,17 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
     return () => window.removeEventListener('groupCollapse', handleGroupCollapse);
   }, [setNodes]);
 
+  // Handle edge deletion from CustomEdge component
+  useEffect(() => {
+    const handleDeleteEdge = (event: Event) => {
+      const { edgeId } = (event as CustomEvent).detail;
+      setEdges((eds) => eds.filter((edge) => edge.id !== edgeId));
+    };
+
+    window.addEventListener('deleteEdge', handleDeleteEdge);
+    return () => window.removeEventListener('deleteEdge', handleDeleteEdge);
+  }, [setEdges]);
+
   // Execute flow when nodes or edges change (with persistent cache)
   useEffect(() => {
     const result = executeFlow(nodes, edges, executionCacheRef.current);
@@ -429,6 +440,7 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
+        fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
         style={flowStyles}
         deleteKeyCode={['Backspace', 'Delete']}
         selectionOnDrag
@@ -438,6 +450,17 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
           style: { stroke: '#64748b', strokeWidth: 2 },
           type: 'custom',
         }}
+        // Performance optimizations
+        nodesDraggable
+        nodesConnectable
+        elementsSelectable
+        minZoom={0.1}
+        maxZoom={2}
+        snapToGrid={false}
+        onlyRenderVisibleElements
+        // Disable animations for better performance
+        nodesFocusable={false}
+        edgesFocusable={false}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#334155" />
         <Controls className="!bg-slate-800 !border-slate-700 !shadow-lg [&>button]:!bg-slate-700 [&>button]:!border-slate-600 [&>button]:!text-slate-300 [&>button:hover]:!bg-slate-600" />
@@ -465,7 +488,7 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
 
       {/* Bottom Toolbar */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
-        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/95 backdrop-blur-sm rounded-lg shadow-lg border border-slate-700">
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg shadow-lg border border-slate-700">
           {/* Flow name input */}
           <input
             type="text"

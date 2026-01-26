@@ -9,19 +9,21 @@ import { Toolbar } from './components/Toolbar';
 import { Console } from './components/Console';
 import { ConnectionIndicator } from './components/ConnectionIndicator';
 import { StreamingProgress } from './components/StreamingProgress';
-import { useVectorSettings } from './hooks/useVectorSettings';
+import { useVectorSettings, getColorWells, type ColorWell } from './hooks/useVectorSettings';
 import { useConsole } from './hooks/useConsole';
 import { useFluidNC } from './hooks/useFluidNC';
-import type { Path } from './utils/drawingApi';
+import type { ColoredPath } from './utils/drawingApi';
 import { generateVectorGCode, type GeneratedVectorGCode } from './utils/vectorGcodeGenerator';
 import { uploadGCode } from './utils/hardware';
 
 export default function App() {
-  const [paths, setPaths] = useState<Path[]>([]);
+  const [paths, setPaths] = useState<ColoredPath[]>([]);
   const [gcodeResult, setGcodeResult] = useState<GeneratedVectorGCode | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [placementMode, setPlacementMode] = useState<{ colorIndex: 1 | 2 | 3 | 4; color: string } | null>(null);
 
   const { settings, updateSetting, resetSettings } = useVectorSettings();
+  const colorWells = useMemo(() => getColorWells(settings), [settings]);
   const { logs, log, clear } = useConsole();
   const lastExecutionRef = useRef<FlowExecutionResult | null>(null);
 
@@ -60,7 +62,7 @@ export default function App() {
 
   // Handle flow editor changes
   const handleFlowChange = useCallback(
-    (newPaths: Path[], result: FlowExecutionResult) => {
+    (newPaths: ColoredPath[], result: FlowExecutionResult) => {
       lastExecutionRef.current = result;
       setPaths(newPaths);
 
@@ -181,6 +183,20 @@ export default function App() {
   // Memoize gcodeLines to prevent unnecessary re-renders of VectorPreview
   const gcodeLines = useMemo(() => gcodeResult?.lines ?? [], [gcodeResult?.lines]);
 
+  // Memoize outputSettings to prevent object recreation on every render
+  const outputSettings = useMemo(() => ({
+    targetWidth: settings.targetWidth,
+    targetHeight: settings.targetHeight,
+    offsetX: settings.offsetX,
+    offsetY: settings.offsetY,
+  }), [settings.targetWidth, settings.targetHeight, settings.offsetX, settings.offsetY]);
+
+  // Memoize colorWells for preview to prevent array recreation
+  const previewColorWells = useMemo(
+    () => settings.colorPaletteEnabled ? colorWells : [],
+    [settings.colorPaletteEnabled, colorWells]
+  );
+
   // Memoize streaming callbacks to prevent re-renders
   const handlePauseStreaming = useCallback(() => {
     fluidNC.pauseStreaming();
@@ -197,10 +213,32 @@ export default function App() {
     log('Streaming cancelled', 'warning');
   }, [fluidNC, log]);
 
+  // Color well placement handlers
+  const handleSetColorWellPosition = useCallback((colorIndex: 1 | 2 | 3 | 4) => {
+    const well = colorWells.find(w => w.id === colorIndex);
+    if (well) {
+      setPlacementMode({ colorIndex, color: well.color });
+    }
+  }, [colorWells]);
+
+  const handlePlacementConfirm = useCallback((x: number, y: number) => {
+    if (placementMode) {
+      const { colorIndex } = placementMode;
+      updateSetting(`colorWell${colorIndex}X` as keyof typeof settings, x);
+      updateSetting(`colorWell${colorIndex}Y` as keyof typeof settings, y);
+      log(`Color ${colorIndex} well position set to X:${x} Y:${y}`, 'success');
+      setPlacementMode(null);
+    }
+  }, [placementMode, updateSetting, log, settings]);
+
+  const handlePlacementCancel = useCallback(() => {
+    setPlacementMode(null);
+  }, []);
+
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-white overflow-hidden">
       {/* Header */}
-      <header className="flex-shrink-0 border-b border-slate-700 bg-slate-900/95 backdrop-blur-sm z-10">
+      <header className="flex-shrink-0 border-b border-slate-700 bg-slate-900 z-10">
         <div className="px-4 py-2 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-100">Nirmana Flow</h1>
@@ -255,12 +293,11 @@ export default function App() {
                     showSimulation={true}
                     machinePosition={fluidNC.status.position}
                     isConnected={fluidNC.isConnected}
-                    outputSettings={{
-                      targetWidth: settings.targetWidth,
-                      targetHeight: settings.targetHeight,
-                      offsetX: settings.offsetX,
-                      offsetY: settings.offsetY,
-                    }}
+                    outputSettings={outputSettings}
+                    placementMode={placementMode}
+                    onPlacementConfirm={handlePlacementConfirm}
+                    onPlacementCancel={handlePlacementCancel}
+                    colorWells={previewColorWells}
                   />
 
                   {/* Stats */}
@@ -308,6 +345,7 @@ export default function App() {
                         settings={settings}
                         onUpdate={updateSetting}
                         onReset={resetSettings}
+                        onSetColorWellPosition={handleSetColorWellPosition}
                       />
                     </div>
                   </Allotment.Pane>

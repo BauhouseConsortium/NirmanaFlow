@@ -6,6 +6,12 @@
 export type Point = [number, number];
 export type Path = Point[];
 
+// Extended path type with color metadata for multi-color mode
+export interface ColoredPath {
+  points: Point[];
+  color?: 1 | 2 | 3 | 4; // Color well index (1-4)
+}
+
 export interface DrawingContext {
   width: number;
   height: number;

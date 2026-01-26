@@ -25,6 +25,24 @@ export const VectorSettingsSchema = z.object({
   dipY: z.number().min(0).max(200).default(5),
   continuousPlot: z.boolean().default(true),
 
+  // Main color selection (uses color well position when color palette is enabled)
+  mainColor: z.number().min(1).max(4).default(1),
+
+  // Color palette (multi-color mode)
+  colorPaletteEnabled: z.boolean().default(false),
+  colorWell1X: z.number().min(0).max(200).default(41),
+  colorWell1Y: z.number().min(0).max(200).default(5),
+  colorWell1Color: z.string().default('#1e40af'), // Blue
+  colorWell2X: z.number().min(0).max(200).default(51),
+  colorWell2Y: z.number().min(0).max(200).default(5),
+  colorWell2Color: z.string().default('#dc2626'), // Red
+  colorWell3X: z.number().min(0).max(200).default(61),
+  colorWell3Y: z.number().min(0).max(200).default(5),
+  colorWell3Color: z.string().default('#16a34a'), // Green
+  colorWell4X: z.number().min(0).max(200).default(71),
+  colorWell4Y: z.number().min(0).max(200).default(5),
+  colorWell4Color: z.string().default('#171717'), // Black
+
   // Filter
   artefactThreshold: z.number().min(0).max(10).default(0.1),
 
@@ -34,6 +52,24 @@ export const VectorSettingsSchema = z.object({
 
 // Infer TypeScript type from schema
 export type VectorSettings = z.infer<typeof VectorSettingsSchema>;
+
+// Helper type for color well
+export interface ColorWell {
+  id: 1 | 2 | 3 | 4;
+  x: number;
+  y: number;
+  color: string;
+}
+
+// Helper to get color wells as array
+export function getColorWells(settings: VectorSettings): ColorWell[] {
+  return [
+    { id: 1, x: settings.colorWell1X, y: settings.colorWell1Y, color: settings.colorWell1Color },
+    { id: 2, x: settings.colorWell2X, y: settings.colorWell2Y, color: settings.colorWell2Color },
+    { id: 3, x: settings.colorWell3X, y: settings.colorWell3Y, color: settings.colorWell3Color },
+    { id: 4, x: settings.colorWell4X, y: settings.colorWell4Y, color: settings.colorWell4Color },
+  ];
+}
 
 // Schema for individual setting validation (partial)
 export const PartialVectorSettingsSchema = VectorSettingsSchema.partial();
@@ -89,6 +125,20 @@ export function getFieldConstraints(key: keyof VectorSettings): { min?: number; 
     dipX: { min: 0, max: 200, step: 1 },
     dipY: { min: 0, max: 200, step: 1 },
     continuousPlot: {},
+    mainColor: { min: 1, max: 4, step: 1 },
+    colorPaletteEnabled: {},
+    colorWell1X: { min: 0, max: 200, step: 1 },
+    colorWell1Y: { min: 0, max: 200, step: 1 },
+    colorWell1Color: {},
+    colorWell2X: { min: 0, max: 200, step: 1 },
+    colorWell2Y: { min: 0, max: 200, step: 1 },
+    colorWell2Color: {},
+    colorWell3X: { min: 0, max: 200, step: 1 },
+    colorWell3Y: { min: 0, max: 200, step: 1 },
+    colorWell3Color: {},
+    colorWell4X: { min: 0, max: 200, step: 1 },
+    colorWell4Y: { min: 0, max: 200, step: 1 },
+    colorWell4Color: {},
     artefactThreshold: { min: 0, max: 10, step: 0.1 },
     controllerHost: {},
   };

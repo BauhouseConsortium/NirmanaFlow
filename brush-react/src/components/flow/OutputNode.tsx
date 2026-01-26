@@ -20,7 +20,7 @@ function OutputNodeComponent({ data }: OutputNodeProps) {
         position={Position.Top}
         className="!bg-emerald-500 !border-slate-700 !w-3 !h-3"
       />
-      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+      <div className="w-2 h-2 rounded-full bg-emerald-500" />
       <span className="font-medium text-emerald-400 text-sm">
         {data.label || 'Output'}
       </span>

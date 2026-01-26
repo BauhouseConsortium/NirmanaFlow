@@ -2,7 +2,7 @@
  * G-code generator for vector paths from the drawing API
  */
 
-import type { Path, Point } from './drawingApi';
+import type { Path, Point, ColoredPath } from './drawingApi';
 import { getPathLength, optimizePaths } from './pathOptimizer';
 import { BacklashFixer } from './backlashFixer';
 
@@ -29,6 +29,24 @@ export interface VectorSettings {
   dipY: number;
   continuousPlot: boolean;
 
+  // Main color (1-4) - which color well to use when color palette is enabled
+  mainColor: number;
+
+  // Color palette settings
+  colorPaletteEnabled: boolean;
+  colorWell1X: number;
+  colorWell1Y: number;
+  colorWell1Color: string;
+  colorWell2X: number;
+  colorWell2Y: number;
+  colorWell2Color: string;
+  colorWell3X: number;
+  colorWell3Y: number;
+  colorWell3Color: string;
+  colorWell4X: number;
+  colorWell4Y: number;
+  colorWell4Color: string;
+
   // Filter settings
   artefactThreshold: number;
 }
@@ -54,8 +72,27 @@ function distance(p1: Point, p2: Point): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+// Helper to get dip position for a color
+function getColorWellPosition(
+  colorIndex: number,
+  settings: VectorSettings
+): { x: number; y: number } {
+  switch (colorIndex) {
+    case 1:
+      return { x: settings.colorWell1X, y: settings.colorWell1Y };
+    case 2:
+      return { x: settings.colorWell2X, y: settings.colorWell2Y };
+    case 3:
+      return { x: settings.colorWell3X, y: settings.colorWell3Y };
+    case 4:
+      return { x: settings.colorWell4X, y: settings.colorWell4Y };
+    default:
+      return { x: settings.dipX, y: settings.dipY };
+  }
+}
+
 export function generateVectorGCode(
-  paths: Path[],
+  paths: ColoredPath[],
   settings: VectorSettings
 ): GeneratedVectorGCode {
   const {
@@ -73,21 +110,35 @@ export function generateVectorGCode(
     dipX,
     dipY,
     continuousPlot,
+    colorPaletteEnabled,
+    mainColor,
     artefactThreshold,
   } = settings;
 
-  // Filter tiny paths
-  let filteredPaths = paths.filter((path) => getPathLength(path) >= artefactThreshold);
+  // Filter tiny paths (using points from ColoredPath)
+  let filteredPaths = paths.filter((cp) => getPathLength(cp.points) >= artefactThreshold);
   const artefactsRemoved = paths.length - filteredPaths.length;
 
-  // Optimize paths (sort and merge)
-  filteredPaths = optimizePaths(filteredPaths);
+  // Extract plain paths for optimization, then re-associate with colors
+  const plainPaths = filteredPaths.map(cp => cp.points);
+  const colors = filteredPaths.map(cp => cp.color);
+  const optimizedPlainPaths = optimizePaths(plainPaths);
+
+  // Note: optimization may reorder paths, so we need to create new ColoredPaths
+  // For simplicity, we'll use the paths as-is if colors are being used
+  // If no colors are set, we can use the optimized paths
+  if (colorPaletteEnabled && colors.some(c => c !== undefined)) {
+    // Keep original order to preserve color associations
+    // (optimization might break color groupings)
+  } else {
+    filteredPaths = optimizedPlainPaths.map(points => ({ points, color: undefined }));
+  }
 
   if (filteredPaths.length === 0) {
     return {
       gcode: '',
       lines: [],
-      svg: generateSVG([], canvasWidth, canvasHeight),
+      svg: generateSVG([], canvasWidth, canvasHeight, settings),
       stats: {
         bounds: { minX: 0, maxX: 0, minY: 0, maxY: 0 },
         scale: 1,
@@ -100,8 +151,8 @@ export function generateVectorGCode(
     };
   }
 
-  // Calculate bounds
-  const allPoints = filteredPaths.flatMap((p) => p);
+  // Calculate bounds (using points from ColoredPath)
+  const allPoints = filteredPaths.flatMap((cp) => cp.points);
   const minX = Math.min(...allPoints.map((p) => p[0]));
   const maxX = Math.max(...allPoints.map((p) => p[0]));
   const minY = Math.min(...allPoints.map((p) => p[1]));
@@ -141,22 +192,40 @@ export function generateVectorGCode(
   let dipCount = 0;
   let lastPoint: Point | null = null;
 
+  // Get dip position based on color
+  const getDipPosition = (pathColor: number | undefined) => {
+    if (colorPaletteEnabled) {
+      // Use path-specific color if set, otherwise use mainColor
+      const colorIndex = pathColor ?? mainColor;
+      return getColorWellPosition(colorIndex, settings);
+    }
+    // When color palette is disabled, use default dip position
+    return { x: dipX, y: dipY };
+  };
+
+  // Track current color for dipping
+  let currentColor: number | undefined = undefined;
+
   // Initial dip
   if (!continuousPlot) {
+    const firstPathColor = filteredPaths[0]?.color;
+    currentColor = colorPaletteEnabled ? (firstPathColor ?? mainColor) : undefined;
+    const dipPos = getDipPosition(firstPathColor);
     dipCount++;
-    lines.push(`(Initial Dip #${dipCount})`);
-    lines.push(`G0 X${dipX} Y${dipY}`);
+    lines.push(`(Initial Dip #${dipCount}${colorPaletteEnabled ? ` - Color ${currentColor ?? mainColor}` : ''})`);
+    lines.push(`G0 X${dipPos.x} Y${dipPos.y}`);
     lines.push('G1 Z-2 F500');
     lines.push('G4 P0.5');
     lines.push(`G0 Z${safeZ}`);
   }
 
   // Process each path
-  for (const path of filteredPaths) {
-    if (path.length === 0) continue;
+  for (const coloredPath of filteredPaths) {
+    if (coloredPath.points.length === 0) continue;
 
-    const transformedPath = path.map(transform);
+    const transformedPath = coloredPath.points.map(transform);
     const firstPoint = transformedPath[0];
+    const pathColor = coloredPath.color;
 
     // Travel to start
     if (lastPoint) {
@@ -184,11 +253,12 @@ export function generateVectorGCode(
 
     lines.push(`G0 Z${safeZ}`); // Pen up
 
-    // Check for dip
+    // Check for dip - use current path's color for dip position
     if (!continuousPlot && distanceAccumulator > dipInterval) {
       dipCount++;
-      lines.push(`(Dip #${dipCount} at dist ${distanceAccumulator.toFixed(1)})`);
-      lines.push(`G0 X${dipX} Y${dipY}`);
+      const dipPos = getDipPosition(pathColor);
+      lines.push(`(Dip #${dipCount} at dist ${distanceAccumulator.toFixed(1)}${colorPaletteEnabled ? ` - Color ${pathColor ?? mainColor}` : ''})`);
+      lines.push(`G0 X${dipPos.x} Y${dipPos.y}`);
       lines.push('G1 Z-2 F500');
       lines.push('G4 P0.5');
       lines.push(`G0 Z${safeZ}`);
@@ -204,7 +274,7 @@ export function generateVectorGCode(
   return {
     gcode: lines.join('\n'),
     lines,
-    svg: generateSVG(filteredPaths, canvasWidth, canvasHeight),
+    svg: generateSVG(filteredPaths, canvasWidth, canvasHeight, settings),
     stats: {
       bounds: { minX, maxX, minY, maxY },
       scale,
@@ -217,18 +287,43 @@ export function generateVectorGCode(
   };
 }
 
-function generateSVG(paths: Path[], width: number, height: number): string {
-  const pathStrings = paths.map((path) => {
-    if (path.length === 0) return '';
+// Default colors for the 4 color wells (matches VectorSettings defaults)
+const COLOR_WELL_COLORS = ['#1e40af', '#dc2626', '#16a34a', '#171717'];
 
-    const d = path
+function generateSVG(
+  coloredPaths: ColoredPath[],
+  width: number,
+  height: number,
+  settings?: VectorSettings
+): string {
+  const pathStrings = coloredPaths.map((coloredPath) => {
+    if (coloredPath.points.length === 0) return '';
+
+    const d = coloredPath.points
       .map((point, i) => {
         const [x, y] = point;
         return i === 0 ? `M ${x.toFixed(2)} ${y.toFixed(2)}` : `L ${x.toFixed(2)} ${y.toFixed(2)}`;
       })
       .join(' ');
 
-    return `<path d="${d}" fill="none" stroke="black" stroke-width="0.5"/>`;
+    // Determine stroke color
+    let strokeColor = 'black';
+    if (settings?.colorPaletteEnabled && coloredPath.color) {
+      // Use the color well's configured color
+      const colorIndex = coloredPath.color;
+      switch (colorIndex) {
+        case 1: strokeColor = settings.colorWell1Color; break;
+        case 2: strokeColor = settings.colorWell2Color; break;
+        case 3: strokeColor = settings.colorWell3Color; break;
+        case 4: strokeColor = settings.colorWell4Color; break;
+      }
+    } else if (settings?.colorPaletteEnabled) {
+      // Use main color
+      const mainColorIndex = settings.mainColor;
+      strokeColor = COLOR_WELL_COLORS[mainColorIndex - 1] || 'black';
+    }
+
+    return `<path d="${d}" fill="none" stroke="${strokeColor}" stroke-width="0.5"/>`;
   });
 
   return `<?xml version="1.0" encoding="UTF-8"?>

@@ -1,15 +1,18 @@
 import { useState } from 'react';
 import type { VectorSettings } from '../hooks/useVectorSettings';
+import { getColorWells } from '../hooks/useVectorSettings';
 
 interface VectorSettingsPanelProps {
   settings: VectorSettings;
   onUpdate: <K extends keyof VectorSettings>(key: K, value: VectorSettings[K]) => void;
   onReset: () => void;
+  onSetColorWellPosition?: (colorIndex: 1 | 2 | 3 | 4) => void;
 }
 
-type Section = 'canvas' | 'output' | 'machine' | 'ink' | 'hardware';
+type Section = 'canvas' | 'output' | 'machine' | 'ink' | 'palette' | 'hardware';
 
-export function VectorSettingsPanel({ settings, onUpdate, onReset }: VectorSettingsPanelProps) {
+export function VectorSettingsPanel({ settings, onUpdate, onReset, onSetColorWellPosition }: VectorSettingsPanelProps) {
+  const colorWells = getColorWells(settings);
   const [expandedSection, setExpandedSection] = useState<Section | null>('canvas');
 
   const toggle = (section: Section) => {
@@ -134,6 +137,28 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset }: VectorSetti
           max={100}
           unit="mm"
         />
+        {settings.colorPaletteEnabled && (
+          <div className="space-y-1">
+            <label className="text-xs text-slate-400">Main Color</label>
+            <div className="flex gap-1">
+              {colorWells.map((well) => (
+                <button
+                  key={well.id}
+                  onClick={() => onUpdate('mainColor', well.id)}
+                  className={`flex-1 py-2 rounded-lg border-2 transition-all ${
+                    settings.mainColor === well.id
+                      ? 'border-white scale-105'
+                      : 'border-transparent opacity-60 hover:opacity-100'
+                  }`}
+                  style={{ backgroundColor: well.color }}
+                  title={`Color ${well.id}`}
+                >
+                  <span className="text-white text-xs font-bold drop-shadow-md">{well.id}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </Section>
 
       <Section id="machine" title="Machine">
@@ -220,6 +245,70 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset }: VectorSetti
               unit="mm"
             />
           </>
+        )}
+      </Section>
+
+      <Section id="palette" title="Color Palette">
+        <div className="flex items-center justify-between">
+          <label className="text-xs text-slate-400">Multi-Color Mode</label>
+          <input
+            type="checkbox"
+            checked={settings.colorPaletteEnabled}
+            onChange={e => onUpdate('colorPaletteEnabled', e.target.checked)}
+            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500"
+          />
+        </div>
+        {settings.colorPaletteEnabled && (
+          <div className="space-y-3 mt-2">
+            {colorWells.map((well) => (
+              <div key={well.id} className="bg-slate-900/50 rounded-lg p-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full border-2 border-white/30"
+                    style={{ backgroundColor: well.color }}
+                  />
+                  <span className="text-xs text-slate-300 font-medium">Color {well.id}</span>
+                  <input
+                    type="color"
+                    value={well.color}
+                    onChange={e => onUpdate(`colorWell${well.id}Color` as keyof VectorSettings, e.target.value)}
+                    className="ml-auto w-6 h-6 rounded cursor-pointer bg-transparent"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 flex-1">
+                    <span className="text-xs text-slate-500">X:</span>
+                    <input
+                      type="number"
+                      value={well.x}
+                      onChange={e => onUpdate(`colorWell${well.id}X` as keyof VectorSettings, Number(e.target.value))}
+                      className="w-14 px-1 py-0.5 text-xs bg-slate-800 border border-slate-600 rounded text-white text-right"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 flex-1">
+                    <span className="text-xs text-slate-500">Y:</span>
+                    <input
+                      type="number"
+                      value={well.y}
+                      onChange={e => onUpdate(`colorWell${well.id}Y` as keyof VectorSettings, Number(e.target.value))}
+                      className="w-14 px-1 py-0.5 text-xs bg-slate-800 border border-slate-600 rounded text-white text-right"
+                    />
+                  </div>
+                  <button
+                    onClick={() => onSetColorWellPosition?.(well.id)}
+                    className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded flex items-center gap-1"
+                    title="Click to set position on canvas"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Set
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </Section>
 

@@ -3,7 +3,11 @@ import { Handle, Position } from '@xyflow/react';
 
 interface ShapeNodeData extends Record<string, unknown> {
   label: string;
+  color?: 1 | 2 | 3 | 4;
 }
+
+// Default colors for the 4 color wells (matches VectorSettings defaults)
+const COLOR_WELL_COLORS = ['#1e40af', '#dc2626', '#16a34a', '#171717'];
 
 type ShapeNodeProps = {
   id: string;
@@ -37,6 +41,13 @@ function ShapeNodeComponent({ data, id }: ShapeNodeProps) {
     // Dispatch custom event for data update
     const event = new CustomEvent('nodeDataChange', {
       detail: { nodeId: id, field, value },
+    });
+    window.dispatchEvent(event);
+  }, [id]);
+
+  const handleColorChange = useCallback((colorIndex: 1 | 2 | 3 | 4 | undefined) => {
+    const event = new CustomEvent('nodeDataChange', {
+      detail: { nodeId: id, field: 'color', value: colorIndex },
     });
     window.dispatchEvent(event);
   }, [id]);
@@ -171,8 +182,37 @@ function ShapeNodeComponent({ data, id }: ShapeNodeProps) {
         <span className="font-medium text-white text-sm">{label}</span>
       </div>
 
-      <div className="p-2 space-y-1">
+      <div className="p-2 space-y-2">
         {renderFields()}
+
+        {/* Color selector for multi-color mode */}
+        <div className="flex items-center gap-1 pt-1 border-t border-slate-700">
+          <span className="text-xs text-slate-500 mr-1">Ink:</span>
+          <button
+            onClick={() => handleColorChange(undefined)}
+            className={`w-5 h-5 rounded text-[10px] font-medium transition-all ${
+              !nodeData.color
+                ? 'bg-slate-600 text-white ring-1 ring-white'
+                : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
+            }`}
+            title="Use main color"
+          >
+            M
+          </button>
+          {[1, 2, 3, 4].map((i) => (
+            <button
+              key={i}
+              onClick={() => handleColorChange(i as 1 | 2 | 3 | 4)}
+              className={`w-5 h-5 rounded transition-all ${
+                nodeData.color === i
+                  ? 'ring-1 ring-white scale-110'
+                  : 'opacity-60 hover:opacity-100'
+              }`}
+              style={{ backgroundColor: COLOR_WELL_COLORS[i - 1] }}
+              title={`Color ${i}`}
+            />
+          ))}
+        </div>
       </div>
 
       <Handle

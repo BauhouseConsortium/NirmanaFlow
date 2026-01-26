@@ -26,12 +26,27 @@ body {
   background-color: #475569 !important;
 }
 
+/* Reduce GPU layer creation */
+.react-flow__renderer,
+.react-flow__edges,
+.react-flow__edge-path {
+  will-change: auto !important;
+}
+
+/* Prevent canvas from unnecessary GPU compositing */
+canvas {
+  will-change: auto;
+  transform: none;
+  image-rendering: auto;
+}
+
 /* React Flow node styling - remove default backgrounds */
 .react-flow__node {
   background: transparent !important;
   border: none !important;
   box-shadow: none !important;
   padding: 0 !important;
+  will-change: auto;
 }
 
 .react-flow__node-output,

@@ -39,7 +39,7 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
     return (
       <button
         onClick={() => setIsExpanded(true)}
-        className="flex items-center gap-2 px-3 py-2 bg-slate-800/95 backdrop-blur-sm rounded-lg border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors shadow-lg"
+        className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors shadow-lg"
         title="Add nodes"
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -51,7 +51,7 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
   }
 
   return (
-    <div className="bg-slate-800/95 backdrop-blur-sm rounded-lg border border-slate-700 shadow-lg w-64 max-h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+    <div className="bg-slate-800 rounded-lg border border-slate-700 shadow-lg w-64 max-h-[calc(100vh-120px)] overflow-hidden flex flex-col">
       {/* Header with collapse button */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700">
         <h3 className="text-sm font-semibold text-slate-300">Add Node</h3>

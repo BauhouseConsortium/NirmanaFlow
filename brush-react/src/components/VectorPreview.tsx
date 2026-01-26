@@ -1,5 +1,8 @@
 import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
-import type { Path } from '../utils/drawingApi';
+import type { ColoredPath } from '../utils/drawingApi';
+
+// Default colors for the 4 color wells (matches VectorSettings defaults)
+const COLOR_WELL_DEFAULTS = ['#1e40af', '#dc2626', '#16a34a', '#171717'];
 
 interface MachinePosition {
   x: number;
@@ -14,8 +17,20 @@ interface OutputSettings {
   offsetY: number;
 }
 
+interface ColorWellPlacement {
+  colorIndex: 1 | 2 | 3 | 4;
+  color: string;
+}
+
+interface ColorWell {
+  id: 1 | 2 | 3 | 4;
+  x: number;
+  y: number;
+  color: string;
+}
+
 interface VectorPreviewProps {
-  paths: Path[];
+  paths: ColoredPath[];
   width: number;
   height: number;
   gcodeLines?: string[];
@@ -23,6 +38,11 @@ interface VectorPreviewProps {
   machinePosition?: MachinePosition | null;
   isConnected?: boolean;
   outputSettings?: OutputSettings;
+  // Color well placement mode
+  placementMode?: ColorWellPlacement | null;
+  onPlacementConfirm?: (x: number, y: number) => void;
+  onPlacementCancel?: () => void;
+  colorWells?: ColorWell[];
 }
 
 // Stable empty array for default prop
@@ -48,28 +68,47 @@ interface GCodePath {
   points: [number, number][];
 }
 
+interface DipPoint {
+  x: number;
+  y: number;
+  afterPathIndex: number; // Which path this dip occurs after
+}
+
 interface ParsedGCode {
   moves: GCodeMove[];
   totalTime: number;
   paths: GCodePath[];
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  dipPoints: DipPoint[];
+  dipWellPosition: { x: number; y: number } | null;
 }
 
 function parseGCodeToMoves(lines: string[]): ParsedGCode {
   const moves: GCodeMove[] = [];
   const paths: GCodePath[] = [];
+  const dipPoints: DipPoint[] = [];
   let currentPath: [number, number][] = [];
 
   let x = 0, y = 0, z = 5;
   let feedRate = DEFAULT_FEED;
   let cumulativeTime = 0;
   let penDown = false;
+  let nextIsDip = false;
+  let dipWellPosition: { x: number; y: number } | null = null;
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith(';') || trimmed.startsWith('(') || trimmed === '%') continue;
+    if (!trimmed || trimmed === '%') continue;
+
+    // Check for dip comments
+    if (trimmed.startsWith('(') && trimmed.includes('Dip #')) {
+      nextIsDip = true;
+      continue;
+    }
+
+    if (trimmed.startsWith(';') || trimmed.startsWith('(')) continue;
 
     const isG0 = trimmed.startsWith('G0');
     const isG1 = trimmed.startsWith('G1');
@@ -103,6 +142,17 @@ function parseGCodeToMoves(lines: string[]): ParsedGCode {
     if (yMatch) y = parseFloat(yMatch[1]);
     if (zMatch) z = parseFloat(zMatch[1]);
     if (fMatch) feedRate = parseFloat(fMatch[1]);
+
+    // Capture dip position (G0 after dip comment)
+    if (nextIsDip && isG0 && xMatch && yMatch) {
+      dipWellPosition = { x, y };
+      dipPoints.push({
+        x,
+        y,
+        afterPathIndex: paths.length - 1, // Dip occurs after current path count
+      });
+      nextIsDip = false;
+    }
 
     const dx = x - prevX;
     const dy = y - prevY;
@@ -166,7 +216,9 @@ function parseGCodeToMoves(lines: string[]): ParsedGCode {
     moves,
     totalTime: cumulativeTime,
     paths,
-    bounds: { minX, minY, maxX, maxY }
+    bounds: { minX, minY, maxX, maxY },
+    dipPoints,
+    dipWellPosition,
   };
 }
 
@@ -179,8 +231,14 @@ function VectorPreviewComponent({
   machinePosition = null,
   isConnected = false,
   outputSettings,
+  placementMode = null,
+  onPlacementConfirm,
+  onPlacementCancel,
+  colorWells = [],
 }: VectorPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
+  const [clickedPosition, setClickedPosition] = useState<{ x: number; y: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animationRef = useRef<number | null>(null);
   const [dimensions, setDimensions] = useState({ width: 400, height: 300 });
@@ -196,29 +254,52 @@ function VectorPreviewComponent({
         moves: [],
         totalTime: 0,
         paths: [],
-        bounds: { minX: 0, minY: 0, maxX: width, maxY: height }
+        bounds: { minX: 0, minY: 0, maxX: width, maxY: height },
+        dipPoints: [],
+        dipWellPosition: null,
       };
     }
     return parseGCodeToMoves(gcodeLines);
   }, [gcodeLines, width, height]);
 
-  // Responsive sizing
+  // Track last dimensions to avoid unnecessary updates
+  const lastDimensionsRef = useRef({ width: 0, height: 0 });
+
+  // Responsive sizing - with proper debouncing to prevent loops
   useEffect(() => {
+    let rafId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
     const updateSize = () => {
-      if (containerRef.current) {
-        const rect = containerRef.current.getBoundingClientRect();
-        const w = rect.width || 400;
-        const h = Math.max(Math.min(w * (height / width), 400), 200);
-        setDimensions({ width: w, height: h });
-      }
+      // Debounce with timeout to prevent rapid updates
+      if (timeoutId) clearTimeout(timeoutId);
+      if (rafId) cancelAnimationFrame(rafId);
+
+      timeoutId = setTimeout(() => {
+        rafId = requestAnimationFrame(() => {
+          if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            const w = Math.floor(rect.width) || 400;
+            const h = Math.floor(Math.max(Math.min(w * (height / width), 400), 200));
+
+            // Only update if dimensions changed by more than 2px (prevents resize loops)
+            const lastW = lastDimensionsRef.current.width;
+            const lastH = lastDimensionsRef.current.height;
+            if (Math.abs(w - lastW) > 2 || Math.abs(h - lastH) > 2) {
+              lastDimensionsRef.current = { width: w, height: h };
+              setDimensions({ width: w, height: h });
+            }
+          }
+        });
+      }, 100); // 100ms debounce
     };
 
     // Delay initial measurement to ensure container has rendered
-    const timer = setTimeout(updateSize, 50);
+    const timer = setTimeout(updateSize, 100);
 
     window.addEventListener('resize', updateSize);
 
-    // Also observe container size changes
+    // Also observe container size changes - but only for significant changes
     const observer = new ResizeObserver(updateSize);
     if (containerRef.current) {
       observer.observe(containerRef.current);
@@ -226,6 +307,8 @@ function VectorPreviewComponent({
 
     return () => {
       clearTimeout(timer);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (rafId) cancelAnimationFrame(rafId);
       window.removeEventListener('resize', updateSize);
       observer.disconnect();
     };
@@ -243,8 +326,17 @@ function VectorPreviewComponent({
     const ch = dimensions.height > 10 ? dimensions.height : canvas.clientHeight || 300;
 
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = cw * dpr;
-    canvas.height = ch * dpr;
+    const targetWidth = Math.floor(cw * dpr);
+    const targetHeight = Math.floor(ch * dpr);
+
+    // Only resize canvas if dimensions actually changed (avoids GPU thrashing)
+    if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+    }
+
+    // Reset transform and scale for drawing
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
 
     // Background
@@ -335,15 +427,32 @@ function VectorPreviewComponent({
         ctx.stroke();
       }
     } else {
-      // Render from canvas paths (original behavior)
-      for (const path of paths) {
-        if (path.length < 2) continue;
+      // Render from canvas paths (with colors when available)
+      for (const coloredPath of paths) {
+        if (coloredPath.points.length < 2) continue;
 
+        // Determine stroke color based on path's color property
+        let strokeColor = '#1e40af'; // Default blue
+        if (coloredPath.color && colorWells.length > 0) {
+          // Use color from colorWells if available
+          const well = colorWells.find(w => w.id === coloredPath.color);
+          if (well) {
+            strokeColor = well.color;
+          } else {
+            // Fallback to default color array
+            strokeColor = COLOR_WELL_DEFAULTS[coloredPath.color - 1] || '#1e40af';
+          }
+        } else if (coloredPath.color) {
+          // Use default colors when no color wells configured
+          strokeColor = COLOR_WELL_DEFAULTS[coloredPath.color - 1] || '#1e40af';
+        }
+
+        ctx.strokeStyle = strokeColor;
         ctx.beginPath();
-        const [sx, sy] = toScreen(path[0][0], path[0][1]);
+        const [sx, sy] = toScreen(coloredPath.points[0][0], coloredPath.points[0][1]);
         ctx.moveTo(sx, sy);
-        for (let i = 1; i < path.length; i++) {
-          const [px, py] = toScreen(path[i][0], path[i][1]);
+        for (let i = 1; i < coloredPath.points.length; i++) {
+          const [px, py] = toScreen(coloredPath.points[i][0], coloredPath.points[i][1]);
           ctx.lineTo(px, py);
         }
         ctx.stroke();
@@ -451,35 +560,184 @@ function VectorPreviewComponent({
       );
     }
 
+    // Draw ink well and dip markers (when not simulating)
+    if (!simState && parsedGCode.dipPoints.length > 0 && parsedGCode.dipWellPosition) {
+      const { dipWellPosition, dipPoints } = parsedGCode;
+      const gcodePaths = parsedGCode.paths;
+
+      // Draw dip markers at the end of strokes that trigger dips
+      for (let i = 0; i < dipPoints.length; i++) {
+        const dip = dipPoints[i];
+        const pathIndex = dip.afterPathIndex;
+
+        // Get the end point of the path that triggered this dip
+        if (pathIndex >= 0 && pathIndex < gcodePaths.length) {
+          const path = gcodePaths[pathIndex];
+          const lastPoint = path.points[path.points.length - 1];
+          const [dx, dy] = toScreen(lastPoint[0], lastPoint[1]);
+
+          // Draw small purple diamond marker
+          ctx.fillStyle = '#6366f180';
+          ctx.beginPath();
+          ctx.moveTo(dx, dy - 6);
+          ctx.lineTo(dx + 6, dy);
+          ctx.lineTo(dx, dy + 6);
+          ctx.lineTo(dx - 6, dy);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = '#6366f1';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+
+          // Draw dip number
+          ctx.fillStyle = '#6366f1';
+          ctx.font = 'bold 8px system-ui';
+          ctx.textAlign = 'center';
+          ctx.fillText(`${i + 1}`, dx, dy + 3);
+        }
+      }
+
+      // Draw ink well icon
+      const [wellX, wellY] = toScreen(dipWellPosition.x, dipWellPosition.y);
+      ctx.fillStyle = '#6366f1';
+      ctx.beginPath();
+      ctx.arc(wellX, wellY, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Draw drop icon inside
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(wellX, wellY - 4);
+      ctx.quadraticCurveTo(wellX + 4, wellY + 2, wellX, wellY + 5);
+      ctx.quadraticCurveTo(wellX - 4, wellY + 2, wellX, wellY - 4);
+      ctx.fill();
+
+      // Label
+      ctx.fillStyle = '#6366f1';
+      ctx.font = 'bold 9px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${dipPoints.length} dips`, wellX, wellY + 18);
+    }
+
+    // Draw color wells (when multi-color mode is enabled)
+    if (colorWells.length > 0 && !simState) {
+      for (const well of colorWells) {
+        const [wx, wy] = toScreen(well.x, well.y);
+
+        // Draw well circle
+        ctx.fillStyle = well.color + '80';
+        ctx.beginPath();
+        ctx.arc(wx, wy, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = well.color;
+        ctx.beginPath();
+        ctx.arc(wx, wy, 6, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Label
+        ctx.fillStyle = well.color;
+        ctx.font = 'bold 9px system-ui';
+        ctx.textAlign = 'center';
+        ctx.fillText(`${well.id}`, wx, wy + 20);
+      }
+    }
+
+    // Draw placement marker (when in placement mode)
+    if (placementMode && (clickedPosition || hoverPosition)) {
+      const pos = clickedPosition || hoverPosition!;
+      const [px, py] = toScreen(pos.x, pos.y);
+
+      // Crosshair
+      ctx.strokeStyle = placementMode.color;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(px - 15, py);
+      ctx.lineTo(px + 15, py);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(px, py - 15);
+      ctx.lineTo(px, py + 15);
+      ctx.stroke();
+
+      // Circle
+      ctx.fillStyle = placementMode.color + '60';
+      ctx.beginPath();
+      ctx.arc(px, py, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = placementMode.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      if (clickedPosition) {
+        // Confirmed marker - inner dot
+        ctx.fillStyle = placementMode.color;
+        ctx.beginPath();
+        ctx.arc(px, py, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
     // Stats overlay
     const pathCount = useGCode ? parsedGCode.paths.length : paths.length;
+    const dipCount = parsedGCode.dipPoints.length;
     if (pathCount > 0 && !simState) {
+      const statsText = dipCount > 0 ? `${pathCount} paths · ${dipCount} dips` : `${pathCount} paths`;
+      const statsWidth = dipCount > 0 ? 150 : 80;
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(4, ch - 24, 120, 20);
+      ctx.fillRect(4, ch - 24, statsWidth, 20);
       ctx.fillStyle = '#ffffff';
       ctx.font = '11px system-ui';
       ctx.textAlign = 'left';
-      ctx.fillText(`${pathCount} paths`, 8, ch - 10);
+      ctx.fillText(statsText, 8, ch - 10);
     }
-  }, [paths, dimensions, width, height, isConnected, machinePosition, parsedGCode]);
+  }, [paths, dimensions, width, height, isConnected, machinePosition, parsedGCode, colorWells, placementMode, clickedPosition, hoverPosition]);
 
-  // Regular drawing
+  // Store drawCanvas in a ref to avoid dependency loops
+  const drawCanvasRef = useRef(drawCanvas);
+  drawCanvasRef.current = drawCanvas;
+
+  // Track if a redraw is already scheduled to prevent multiple frames
+  const redrawScheduledRef = useRef(false);
+  const scheduleRedraw = useCallback((simState?: { x: number; y: number; z: number; moveIndex: number }) => {
+    if (redrawScheduledRef.current) return;
+    redrawScheduledRef.current = true;
+    requestAnimationFrame(() => {
+      redrawScheduledRef.current = false;
+      drawCanvasRef.current(simState);
+    });
+  }, []);
+
+  // Regular drawing - only redraw when actual data changes
   useEffect(() => {
     if (!isSimulating) {
-      // Draw immediately
-      drawCanvas();
-      // Also redraw after a short delay to catch any layout changes
-      const timer = setTimeout(() => drawCanvas(), 100);
-      return () => clearTimeout(timer);
+      scheduleRedraw();
     }
-  }, [paths, dimensions, isSimulating, drawCanvas]);
+  }, [paths, dimensions, isSimulating, parsedGCode, scheduleRedraw]);
+
+  // Redraw when placement state changes
+  useEffect(() => {
+    if (!isSimulating && (placementMode || colorWells.length > 0)) {
+      scheduleRedraw();
+    }
+  }, [placementMode, colorWells, clickedPosition, hoverPosition, isSimulating, scheduleRedraw]);
 
   // Redraw when machine position updates (for realtime indicator)
   useEffect(() => {
     if (!isSimulating && isConnected && machinePosition) {
-      drawCanvas();
+      scheduleRedraw();
     }
-  }, [machinePosition, isConnected, isSimulating, drawCanvas]);
+  }, [machinePosition, isConnected, isSimulating, scheduleRedraw]);
 
   // Simulation - use memoized parsedGCode
   useEffect(() => {
@@ -508,7 +766,7 @@ function VectorPreviewComponent({
       setSimulationProgress(Math.min(simTime / totalTime * 100, 100));
 
       if (simTime >= totalTime) {
-        drawCanvas();
+        scheduleRedraw();
         setIsSimulating(false);
         setSimulationProgress(100);
         setCurrentInfo('Complete');
@@ -542,7 +800,8 @@ function VectorPreviewComponent({
         }
       }
 
-      drawCanvas(state);
+      // During simulation, draw directly without throttling for smooth animation
+      drawCanvasRef.current(state);
       animationRef.current = requestAnimationFrame(animate);
     };
 
@@ -553,7 +812,7 @@ function VectorPreviewComponent({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isSimulating, parsedGCode, simulationSpeed, drawCanvas]);
+  }, [isSimulating, parsedGCode, simulationSpeed, scheduleRedraw]);
 
   return (
     <div className="space-y-2">
@@ -588,6 +847,8 @@ function VectorPreviewComponent({
                 onChange={(e) => setSimulationSpeed(Number(e.target.value))}
                 className="px-1 py-0.5 bg-slate-800 border border-slate-600 rounded text-slate-300"
               >
+                <option value={0.25}>0.25x</option>
+                <option value={0.5}>0.5x</option>
                 <option value={1}>1x</option>
                 <option value={3}>3x</option>
                 <option value={5}>5x</option>
@@ -614,12 +875,129 @@ function VectorPreviewComponent({
         </div>
       )}
 
-      <div ref={containerRef} className="bg-white rounded-lg overflow-hidden border border-slate-600 min-h-[200px]">
+      <div
+        ref={containerRef}
+        className={`bg-white rounded-lg overflow-hidden border min-h-[200px] relative ${
+          placementMode ? 'border-purple-500 border-2 cursor-crosshair' : 'border-slate-600'
+        }`}
+        onMouseMove={(e) => {
+          if (!placementMode || !canvasRef.current || !outputSettings) return;
+          const rect = canvasRef.current.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          // Convert screen coords to G-code coords
+          const padding = 10;
+          const cw = dimensions.width;
+          const ch = dimensions.height;
+          const bounds = parsedGCode.bounds;
+          const margin = 5;
+          const viewMinX = bounds.minX - margin;
+          const viewMinY = bounds.minY - margin;
+          const viewMaxX = bounds.maxX + margin;
+          const viewMaxY = bounds.maxY + margin;
+          const viewWidth = viewMaxX - viewMinX;
+          const viewHeight = viewMaxY - viewMinY;
+          const scale = Math.min((cw - padding * 2) / viewWidth, (ch - padding * 2) / viewHeight);
+          const gcodeX = ((x - padding) / scale) + viewMinX;
+          const gcodeY = ((y - padding) / scale) + viewMinY;
+          setHoverPosition({ x: Math.round(gcodeX), y: Math.round(gcodeY) });
+        }}
+        onMouseLeave={() => setHoverPosition(null)}
+        onClick={(e) => {
+          if (!placementMode || !canvasRef.current || !outputSettings) return;
+          const rect = canvasRef.current.getBoundingClientRect();
+          const x = e.clientX - rect.left;
+          const y = e.clientY - rect.top;
+          // Convert screen coords to G-code coords
+          const padding = 10;
+          const cw = dimensions.width;
+          const ch = dimensions.height;
+          const bounds = parsedGCode.bounds;
+          const margin = 5;
+          const viewMinX = bounds.minX - margin;
+          const viewMinY = bounds.minY - margin;
+          const viewMaxX = bounds.maxX + margin;
+          const viewMaxY = bounds.maxY + margin;
+          const viewWidth = viewMaxX - viewMinX;
+          const viewHeight = viewMaxY - viewMinY;
+          const scale = Math.min((cw - padding * 2) / viewWidth, (ch - padding * 2) / viewHeight);
+          const gcodeX = ((x - padding) / scale) + viewMinX;
+          const gcodeY = ((y - padding) / scale) + viewMinY;
+          setClickedPosition({ x: Math.round(gcodeX), y: Math.round(gcodeY) });
+        }}
+      >
         <canvas
           ref={canvasRef}
-          style={{ width: '100%', height: dimensions.height }}
+          style={{ width: dimensions.width, height: dimensions.height }}
           className="block"
         />
+
+        {/* Placement mode overlay */}
+        {placementMode && (
+          <div className="absolute inset-0 pointer-events-none">
+            {/* Header */}
+            <div className="absolute top-2 left-2 right-2 bg-purple-600/90 rounded-lg px-3 py-2 pointer-events-auto">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full border-2 border-white"
+                    style={{ backgroundColor: placementMode.color }}
+                  />
+                  <span className="text-white text-sm font-medium">
+                    Setting Color {placementMode.colorIndex} Position
+                  </span>
+                </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlacementCancel?.();
+                    setClickedPosition(null);
+                    setHoverPosition(null);
+                  }}
+                  className="text-white/80 hover:text-white text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+
+            {/* Live coordinates */}
+            {(hoverPosition || clickedPosition) && (
+              <div className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-black/80 rounded-lg px-3 py-2 text-white text-sm font-mono">
+                X: {(clickedPosition || hoverPosition)!.x} &nbsp; Y: {(clickedPosition || hoverPosition)!.y}
+              </div>
+            )}
+
+            {/* Confirm/Cancel buttons */}
+            {clickedPosition && (
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-2 pointer-events-auto">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onPlacementConfirm?.(clickedPosition.x, clickedPosition.y);
+                    setClickedPosition(null);
+                    setHoverPosition(null);
+                  }}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium flex items-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Confirm
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setClickedPosition(null);
+                  }}
+                  className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white rounded-lg font-medium"
+                >
+                  Reposition
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -667,6 +1045,14 @@ export const VectorPreview = memo(VectorPreviewComponent, (prev, next) => {
     ) {
       return false;
     }
+  }
+
+  // Placement mode changes
+  if (prev.placementMode !== next.placementMode) return false;
+
+  // Color wells changes
+  if (prev.colorWells !== next.colorWells) {
+    if (prev.colorWells?.length !== next.colorWells?.length) return false;
   }
 
   return true;

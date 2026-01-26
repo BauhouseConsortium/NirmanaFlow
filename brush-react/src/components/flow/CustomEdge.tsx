@@ -1,9 +1,8 @@
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import {
   BaseEdge,
   EdgeLabelRenderer,
   getSmoothStepPath,
-  useReactFlow,
 } from '@xyflow/react';
 
 interface CustomEdgeProps {
@@ -27,8 +26,6 @@ function CustomEdgeComponent({
   targetPosition,
   selected,
 }: CustomEdgeProps) {
-  const { setEdges } = useReactFlow();
-
   const [edgePath, labelX, labelY] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -38,9 +35,10 @@ function CustomEdgeComponent({
     targetPosition,
   });
 
-  const onEdgeClick = () => {
-    setEdges((edges) => edges.filter((edge) => edge.id !== id));
-  };
+  // Use event-based approach to avoid useReactFlow subscription overhead
+  const onEdgeClick = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('deleteEdge', { detail: { edgeId: id } }));
+  }, [id]);
 
   return (
     <>

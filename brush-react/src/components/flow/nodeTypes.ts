@@ -4,6 +4,7 @@
 
 export interface NodeData {
   label: string;
+  color?: 1 | 2 | 3 | 4; // Color well index (1-4) for multi-color mode
   [key: string]: unknown;
 }
 

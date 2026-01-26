@@ -5,12 +5,12 @@
  */
 
 import type { Node, Edge } from '@xyflow/react';
-import type { Path, Point } from '../../utils/drawingApi';
+import type { Path, Point, ColoredPath } from '../../utils/drawingApi';
 
 // ============ Persistent Cache System ============
 
 interface CacheEntry {
-  paths: Path[];
+  paths: ColoredPath[];
   dataHash: string;
   upstreamHash: string; // Combined hash of all upstream node hashes
 }
@@ -110,7 +110,7 @@ export class FlowExecutionCache {
    * Get cached paths for a node if valid
    * Returns cached paths only if the current hash matches the stored hash
    */
-  get(nodeId: string, currentHash: string): Path[] | null {
+  get(nodeId: string, currentHash: string): ColoredPath[] | null {
     const entry = this.cache.get(nodeId);
     if (entry && entry.dataHash === currentHash) {
       this.hitCount++;
@@ -123,7 +123,7 @@ export class FlowExecutionCache {
   /**
    * Store paths for a node
    */
-  set(nodeId: string, paths: Path[], dataHash: string, upstreamHash: string): void {
+  set(nodeId: string, paths: ColoredPath[], dataHash: string, upstreamHash: string): void {
     this.cache.set(nodeId, { paths, dataHash, upstreamHash });
   }
 
@@ -247,9 +247,10 @@ function getSourceNodes(targetId: string, nodes: Node[], edges: Edge[]): Node[] 
 }
 
 // Generate paths from a shape node using Zod-validated data
-function generateShapePaths(node: Node): Path[] {
+function generateShapePaths(node: Node): ColoredPath[] {
   const data = node.data as Record<string, unknown>;
   const label = ((data.label as string) || '').toLowerCase();
+  const nodeColor = data.color as (1 | 2 | 3 | 4 | undefined);
   const paths: Path[] = [];
 
   switch (label) {
@@ -327,7 +328,8 @@ function generateShapePaths(node: Node): Path[] {
     }
   }
 
-  return paths;
+  // Convert to ColoredPath with node's color
+  return paths.map(points => ({ points, color: nodeColor }));
 }
 
 // Transform a point around a center
@@ -363,29 +365,40 @@ function transformPoint(
   return [x + cx + tx, y + cy + ty];
 }
 
-// Transform paths
+// Transform paths (preserves color)
 function transformPaths(
-  paths: Path[],
+  paths: ColoredPath[],
   tx: number,
   ty: number,
   rotation = 0,
   scale = 1,
   cx = 0,
   cy = 0
-): Path[] {
-  return paths.map((path) =>
-    path.map((point) => transformPoint(point, tx, ty, rotation, scale, cx, cy))
-  );
+): ColoredPath[] {
+  return paths.map((coloredPath) => ({
+    points: coloredPath.points.map((point) => transformPoint(point, tx, ty, rotation, scale, cx, cy)),
+    color: coloredPath.color,
+  }));
 }
 
-// Calculate centroid of paths
-function getPathsCentroid(paths: Path[]): Point {
+// Helper: Convert ColoredPath[] to Path[] (extracts points only)
+function toPlainPaths(coloredPaths: ColoredPath[]): Path[] {
+  return coloredPaths.map(cp => cp.points);
+}
+
+// Helper: Convert Path[] to ColoredPath[] with optional color
+function toColoredPaths(paths: Path[], color?: 1 | 2 | 3 | 4): ColoredPath[] {
+  return paths.map(points => ({ points, color }));
+}
+
+// Calculate centroid of colored paths
+function getPathsCentroid(paths: ColoredPath[]): Point {
   let sumX = 0;
   let sumY = 0;
   let count = 0;
 
-  for (const path of paths) {
-    for (const point of path) {
+  for (const coloredPath of paths) {
+    for (const point of coloredPath.points) {
       sumX += point[0];
       sumY += point[1];
       count++;
@@ -516,8 +529,8 @@ function expandLSystem(axiom: string, rules: Map<string, string>, iterations: nu
   return current;
 }
 
-// Apply L-System transformation to input paths using Zod-validated data
-function applyLSystem(node: Node, inputPaths: Path[]): Path[] {
+// Apply L-System transformation to input paths using Zod-validated data (preserves colors)
+function applyLSystem(node: Node, inputPaths: ColoredPath[]): ColoredPath[] {
   const data = node.data as Record<string, unknown>;
   const validated = parseNodeData('lsystem', data) as LSystemNodeData | null;
   const {
@@ -533,7 +546,7 @@ function applyLSystem(node: Node, inputPaths: Path[]): Path[] {
   const rules = parseLSystemRules(rulesStr);
   const expanded = expandLSystem(axiom, rules, iterations);
 
-  const resultPaths: Path[] = [];
+  const resultPaths: ColoredPath[] = [];
   const centroid = getPathsCentroid(inputPaths);
 
   // Turtle state
@@ -734,8 +747,8 @@ function getPathLength(
   return length;
 }
 
-// Apply path layout to input paths (text along path) using Zod-validated data
-function applyPathLayout(node: Node, inputPaths: Path[]): Path[] {
+// Apply path layout to input paths (text along path) using Zod-validated data (preserves colors)
+function applyPathLayout(node: Node, inputPaths: ColoredPath[]): ColoredPath[] {
   if (inputPaths.length === 0) return [];
 
   const data = node.data as Record<string, unknown>;
@@ -762,8 +775,8 @@ function applyPathLayout(node: Node, inputPaths: Path[]): Path[] {
   let minX = Infinity, maxX = -Infinity;
   let minY = Infinity, maxY = -Infinity;
 
-  for (const path of inputPaths) {
-    for (const [px, py] of path) {
+  for (const coloredPath of inputPaths) {
+    for (const [px, py] of coloredPath.points) {
       minX = Math.min(minX, px);
       maxX = Math.max(maxX, px);
       minY = Math.min(minY, py);
@@ -772,7 +785,6 @@ function applyPathLayout(node: Node, inputPaths: Path[]): Path[] {
   }
 
   const textWidth = (maxX - minX) * spacing;
-  const textCenterX = (minX + maxX) / 2;
   const textCenterY = (minY + maxY) / 2;
 
   // Get path length and calculate where text starts
@@ -785,13 +797,13 @@ function applyPathLayout(node: Node, inputPaths: Path[]): Path[] {
     startT = 1 - (textWidth / pathLength);
   }
 
-  // Transform each point in input paths
-  const resultPaths: Path[] = [];
+  // Transform each point in input paths (preserving colors)
+  const resultPaths: ColoredPath[] = [];
 
-  for (const path of inputPaths) {
+  for (const coloredPath of inputPaths) {
     const transformedPath: Point[] = [];
 
-    for (const [px, py] of path) {
+    for (const [px, py] of coloredPath.points) {
       // Calculate position along text (0 to 1 within text width)
       const textT = textWidth > 0 ? (px - minX) / textWidth : 0;
 
@@ -821,7 +833,7 @@ function applyPathLayout(node: Node, inputPaths: Path[]): Path[] {
     }
 
     if (transformedPath.length > 1) {
-      resultPaths.push(transformedPath);
+      resultPaths.push({ points: transformedPath, color: coloredPath.color });
     }
   }
 
@@ -945,8 +957,8 @@ function evaluateFormula(formula: string, t: number): number {
   }
 }
 
-// Apply algorithmic (bytebeat) node transformations using Zod-validated data
-function applyAlgorithmic(node: Node, inputPaths: Path[]): Path[] {
+// Apply algorithmic (bytebeat) node transformations using Zod-validated data (preserves colors)
+function applyAlgorithmic(node: Node, inputPaths: ColoredPath[]): ColoredPath[] {
   const data = node.data as Record<string, unknown>;
   const validated = parseNodeData('algorithmic', data) as AlgorithmicNodeData | null;
   const { formula, count, mode, xScale, yScale, rotScale, sclScale, baseX, baseY } = validated ?? {
@@ -956,7 +968,7 @@ function applyAlgorithmic(node: Node, inputPaths: Path[]): Path[] {
 
   if (inputPaths.length === 0) return [];
 
-  const resultPaths: Path[] = [];
+  const resultPaths: ColoredPath[] = [];
   const centroid = getPathsCentroid(inputPaths);
 
   for (let t = 0; t < count; t++) {
@@ -1289,8 +1301,8 @@ function executeCodeNode(node: Node, inputPaths: Path[]): { paths: Path[]; error
   }
 }
 
-// Apply transform node transformations (single transform) using Zod-validated data
-function applyTransform(node: Node, inputPaths: Path[]): Path[] {
+// Apply transform node transformations (single transform) using Zod-validated data (preserves colors)
+function applyTransform(node: Node, inputPaths: ColoredPath[]): ColoredPath[] {
   const data = node.data as Record<string, unknown>;
   const label = ((data.label as string) || '').toLowerCase();
 
@@ -1312,14 +1324,15 @@ function applyTransform(node: Node, inputPaths: Path[]): Path[] {
     case 'scale': {
       const validated = parseNodeData('scale', data) as ScaleNodeData | null;
       const { sx, sy, cx, cy } = validated ?? { sx: 1, sy: 1, cx: 0, cy: 0 };
-      // For non-uniform scaling, we need to handle it differently
-      return inputPaths.map((path) =>
-        path.map((point) => {
+      // For non-uniform scaling, we need to handle it differently (preserves colors)
+      return inputPaths.map((coloredPath) => ({
+        points: coloredPath.points.map((point) => {
           const x = (point[0] - cx) * sx + cx;
           const y = (point[1] - cy) * sy + cy;
           return [x, y] as Point;
-        })
-      );
+        }),
+        color: coloredPath.color,
+      }));
     }
 
     default:
@@ -1327,11 +1340,11 @@ function applyTransform(node: Node, inputPaths: Path[]): Path[] {
   }
 }
 
-// Apply iteration node transformations using Zod-validated data
-function applyIteration(node: Node, inputPaths: Path[]): Path[] {
+// Apply iteration node transformations using Zod-validated data (preserves colors)
+function applyIteration(node: Node, inputPaths: ColoredPath[]): ColoredPath[] {
   const data = node.data as Record<string, unknown>;
   const label = ((data.label as string) || '').toLowerCase();
-  const resultPaths: Path[] = [];
+  const resultPaths: ColoredPath[] = [];
 
   if (inputPaths.length === 0) return [];
 
@@ -1402,7 +1415,7 @@ export function executeFlowGraph(
   nodes: Node[],
   edges: Edge[],
   persistentCache?: FlowExecutionCache
-): Path[] {
+): ColoredPath[] {
   // Find output node
   const outputNode = nodes.find((n) => n.type === 'output');
   if (!outputNode) return [];
@@ -1417,10 +1430,10 @@ export function executeFlowGraph(
   }
 
   // Session cache for this execution (prevents duplicate work within single run)
-  const sessionCache = new Map<string, Path[]>();
+  const sessionCache = new Map<string, ColoredPath[]>();
 
   // Recursive function to get paths from a node
-  function getNodePaths(nodeId: string): Path[] {
+  function getNodePaths(nodeId: string): ColoredPath[] {
     // Check session cache first (within-execution deduplication)
     if (sessionCache.has(nodeId)) {
       return sessionCache.get(nodeId)!;
@@ -1437,83 +1450,86 @@ export function executeFlowGraph(
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return [];
 
-    let paths: Path[] = [];
+    let paths: ColoredPath[] = [];
+    const nodeData = node.data as Record<string, unknown>;
+    const nodeColor = nodeData.color as (1 | 2 | 3 | 4 | undefined);
 
     // Get paths from source nodes first
     const sourceNodes = getSourceNodes(nodeId, nodes, edges);
 
     if (node.type === 'shape') {
-      // Shape nodes generate their own paths
+      // Shape nodes generate their own paths (color already included)
       paths = generateShapePaths(node);
     } else if (node.type === 'attractor') {
       // Attractor nodes generate strange attractor paths
-      paths = generateAttractor(node);
+      const plainPaths = generateAttractor(node);
+      paths = toColoredPaths(plainPaths, nodeColor);
     } else if (node.type === 'text') {
       // Text nodes render text as stroke paths using Zod-validated data
-      const data = node.data as Record<string, unknown>;
-      const validated = parseNodeData('text', data) as TextNodeData | null;
+      const validated = parseNodeData('text', nodeData) as TextNodeData | null;
       const { text, x, y, size, spacing } = validated ?? {
         text: '', x: 0, y: 0, size: 10, spacing: 1.2
       };
-      paths = renderText(text, { x, y, size, spacing });
+      const plainPaths = renderText(text, { x, y, size, spacing });
+      paths = toColoredPaths(plainPaths, nodeColor);
     } else if (node.type === 'batak') {
       // Batak text nodes render Batak script using Zod-validated data
-      const data = node.data as Record<string, unknown>;
-      const validated = parseNodeData('batak', data) as BatakTextNodeData | null;
+      const validated = parseNodeData('batak', nodeData) as BatakTextNodeData | null;
       const { text, x, y, size } = validated ?? {
         text: '', x: 10, y: 50, size: 30
       };
-      paths = renderBatakText(text, { x, y, size });
+      const plainPaths = renderBatakText(text, { x, y, size });
+      paths = toColoredPaths(plainPaths, nodeColor);
     } else if (node.type === 'iteration') {
-      // Iteration nodes transform input paths
-      const inputPaths: Path[] = [];
+      // Iteration nodes transform input paths (preserves colors)
+      const inputPaths: ColoredPath[] = [];
       for (const source of sourceNodes) {
         inputPaths.push(...getNodePaths(source.id));
       }
       paths = applyIteration(node, inputPaths);
     } else if (node.type === 'transform') {
-      // Transform nodes apply transformations to input paths
-      const inputPaths: Path[] = [];
+      // Transform nodes apply transformations to input paths (preserves colors)
+      const inputPaths: ColoredPath[] = [];
       for (const source of sourceNodes) {
         inputPaths.push(...getNodePaths(source.id));
       }
       paths = applyTransform(node, inputPaths);
     } else if (node.type === 'algorithmic') {
       // Algorithmic nodes apply bytebeat formula-driven transformations
-      const inputPaths: Path[] = [];
+      const inputPaths: ColoredPath[] = [];
       for (const source of sourceNodes) {
         inputPaths.push(...getNodePaths(source.id));
       }
       paths = applyAlgorithmic(node, inputPaths);
     } else if (node.type === 'lsystem') {
       // L-System nodes apply fractal pattern transformations
-      const inputPaths: Path[] = [];
+      const inputPaths: ColoredPath[] = [];
       for (const source of sourceNodes) {
         inputPaths.push(...getNodePaths(source.id));
       }
       paths = applyLSystem(node, inputPaths);
     } else if (node.type === 'path') {
       // Path nodes layout input along a path (text on path, etc.)
-      const inputPaths: Path[] = [];
+      const inputPaths: ColoredPath[] = [];
       for (const source of sourceNodes) {
         inputPaths.push(...getNodePaths(source.id));
       }
       paths = applyPathLayout(node, inputPaths);
     } else if (node.type === 'code') {
       // Code nodes execute custom JavaScript to transform/generate paths
-      const inputPaths: Path[] = [];
+      const inputPaths: ColoredPath[] = [];
       for (const source of sourceNodes) {
         inputPaths.push(...getNodePaths(source.id));
       }
-      const result = executeCodeNode(node, inputPaths);
-      paths = result.paths;
+      const result = executeCodeNode(node, toPlainPaths(inputPaths));
+      paths = toColoredPaths(result.paths, nodeColor);
       // Store error in node data for display (via event)
       if (result.error) {
         const event = new CustomEvent('nodeDataChange', {
           detail: { nodeId: node.id, field: 'error', value: result.error },
         });
         window.dispatchEvent(event);
-      } else if ((node.data as Record<string, unknown>).error) {
+      } else if (nodeData.error) {
         // Clear previous error
         const event = new CustomEvent('nodeDataChange', {
           detail: { nodeId: node.id, field: 'error', value: undefined },
@@ -1564,7 +1580,7 @@ export function executeFlowGraph(
 
 export interface ExecutionResult {
   success: boolean;
-  paths: Path[];
+  paths: ColoredPath[];
   error?: string;
   executionTime: number;
   cacheStats?: { hits: number; misses: number; hitRate: number; size: number };
