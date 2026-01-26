@@ -26,6 +26,14 @@ function BatakTextNodeComponent({ id, data }: BatakTextNodeProps) {
     [id]
   );
 
+  // Open glyph editor via global event
+  const handleOpenGlyphEditor = useCallback(() => {
+    const event = new CustomEvent('openGlyphEditor', {
+      detail: { latinText: data.text || '' },
+    });
+    window.dispatchEvent(event);
+  }, [data.text]);
+
   // Preview the transliterated text
   const batakText = useMemo(() => {
     try {
@@ -41,7 +49,14 @@ function BatakTextNodeComponent({ id, data }: BatakTextNodeProps) {
 
       <div className="px-3 py-2 border-b border-slate-700 flex items-center gap-2">
         <span className="text-lg font-bold text-orange-400">ᯀ</span>
-        <span className="font-medium text-white text-sm">{data.label || 'Batak Text'}</span>
+        <span className="font-medium text-white text-sm flex-1">{data.label || 'Batak Text'}</span>
+        <button
+          onClick={handleOpenGlyphEditor}
+          className="text-xs px-1.5 py-0.5 bg-orange-600 hover:bg-orange-500 text-white rounded"
+          title="Edit Glyphs"
+        >
+          Edit
+        </button>
       </div>
 
       <div className="p-2 space-y-2">

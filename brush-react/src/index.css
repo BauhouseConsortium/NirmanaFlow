@@ -43,7 +43,9 @@ body {
 .react-flow__node-transform,
 .react-flow__node-algorithmic,
 .react-flow__node-attractor,
-.react-flow__node-lsystem {
+.react-flow__node-lsystem,
+.react-flow__node-path,
+.react-flow__node-code {
   background: transparent !important;
 }
 

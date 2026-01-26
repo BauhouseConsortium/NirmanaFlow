@@ -150,6 +150,31 @@ export interface LSystemNodeData extends NodeData {
   scalePerIter: number;
 }
 
+export interface PathNodeData extends NodeData {
+  pathType: 'circle' | 'arc' | 'line' | 'wave' | 'spiral';
+  cx: number;
+  cy: number;
+  radius: number;
+  startAngle: number;
+  endAngle: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  amplitude: number;
+  frequency: number;
+  turns: number;
+  growth: number;
+  align: 'start' | 'center' | 'end';
+  spacing: number;
+  reverse: boolean;
+}
+
+export interface CodeNodeData extends NodeData {
+  code: string;
+  error?: string;
+}
+
 // Output node
 export interface OutputNodeData extends NodeData {
   // No additional data needed
@@ -172,6 +197,8 @@ export type FlowNodeData =
   | AlgorithmicNodeData
   | AttractorNodeData
   | LSystemNodeData
+  | PathNodeData
+  | CodeNodeData
   | OutputNodeData;
 
 // Node categories for the palette
@@ -195,11 +222,13 @@ export const nodeCategories = {
     { type: 'translate', label: 'Translate', description: 'Move shapes' },
     { type: 'rotate', label: 'Rotate', description: 'Rotate shapes' },
     { type: 'scale', label: 'Scale', description: 'Scale shapes' },
+    { type: 'path', label: 'Path Layout', description: 'Arrange text/shapes along a path' },
   ],
   algorithmic: [
     { type: 'algorithmic', label: 'Bytebeat', description: '8-bit viznut-style formula sequencer' },
     { type: 'attractor', label: 'Attractor', description: 'Strange attractors (Clifford, De Jong, etc.)' },
     { type: 'lsystem', label: 'L-System', description: 'Lindenmayer system fractal patterns' },
+    { type: 'code', label: 'Code', description: 'Custom JavaScript code to transform or generate paths' },
   ],
 } as const;
 
@@ -254,6 +283,42 @@ export const nodeDefaults: Record<string, Partial<FlowNodeData>> = {
     startY: 100,
     startAngle: -90,
     scalePerIter: 0.7,
+  },
+  path: {
+    label: 'Path Layout',
+    pathType: 'circle',
+    cx: 75,
+    cy: 60,
+    radius: 40,
+    startAngle: 0,
+    endAngle: 180,
+    x1: 10,
+    y1: 60,
+    x2: 140,
+    y2: 60,
+    amplitude: 20,
+    frequency: 2,
+    turns: 3,
+    growth: 5,
+    align: 'start',
+    spacing: 1,
+    reverse: false,
+  },
+  code: {
+    label: 'Code',
+    code: `// Transform incoming paths or generate new ones
+// Available: input (Path[]), api (Drawing helpers)
+//
+// Return: Path[] (array of paths)
+
+// Example: Pass through with slight offset
+const output = [];
+for (const path of input) {
+  const newPath = path.map(([x, y]) => [x + 5, y + 5]);
+  output.push(newPath);
+}
+return output;
+`,
   },
   output: { label: 'Output' },
 };

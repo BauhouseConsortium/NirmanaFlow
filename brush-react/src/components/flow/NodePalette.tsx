@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { nodeCategories } from './nodeTypes';
 
 interface NodePaletteProps {
@@ -6,107 +6,145 @@ interface NodePaletteProps {
 }
 
 function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  // Get icon for node type
+  const getIcon = (type: string) => {
+    const icons: Record<string, string> = {
+      line: '/',
+      rect: '[]',
+      circle: 'O',
+      ellipse: '()',
+      arc: ')',
+      polygon: '<>',
+      text: 'Aa',
+      batak: 'ᯀ',
+      repeat: '#',
+      grid: ':::',
+      radial: '*',
+      translate: '↗',
+      rotate: '↻',
+      scale: '⤢',
+      path: '~',
+      algorithmic: 'λ',
+      attractor: '∞',
+      lsystem: '🌿',
+      code: '</>',
+    };
+    return icons[type] || '•';
+  };
+
+  if (!isExpanded) {
+    // Collapsed state - just show a button
+    return (
+      <button
+        onClick={() => setIsExpanded(true)}
+        className="flex items-center gap-2 px-3 py-2 bg-slate-800/95 backdrop-blur-sm rounded-lg border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors shadow-lg"
+        title="Add nodes"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+        </svg>
+        <span className="text-sm font-medium">Add Node</span>
+      </button>
+    );
+  }
+
   return (
-    <div className="bg-slate-800/95 backdrop-blur-sm rounded-lg border border-slate-700 p-3 w-48">
-      <h3 className="text-sm font-semibold text-slate-300 mb-3">Add Node</h3>
+    <div className="bg-slate-800/95 backdrop-blur-sm rounded-lg border border-slate-700 shadow-lg w-52 max-h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+      {/* Header with collapse button */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+        <h3 className="text-sm font-semibold text-slate-300">Add Node</h3>
+        <button
+          onClick={() => setIsExpanded(false)}
+          className="p-1 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+          title="Collapse palette"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
 
-      {/* Shapes */}
-      <div className="mb-3">
-        <h4 className="text-xs font-medium text-blue-400 mb-2 uppercase tracking-wider">Shapes</h4>
-        <div className="space-y-1">
-          {nodeCategories.shapes.map((node) => (
-            <button
-              key={node.type}
-              onClick={() => onAddNode(node.type)}
-              className="w-full text-left px-2 py-1.5 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
-              title={node.description}
-            >
-              <span className="w-4 text-center text-xs opacity-60">
-                {node.type === 'line' && '/'}
-                {node.type === 'rect' && '[]'}
-                {node.type === 'circle' && 'O'}
-                {node.type === 'ellipse' && '()'}
-                {node.type === 'arc' && ')'}
-                {node.type === 'polygon' && '<>'}
-                {node.type === 'text' && 'Aa'}
-                {node.type === 'batak' && 'ᯀ'}
-              </span>
-              {node.label}
-            </button>
-          ))}
+      {/* Scrollable content */}
+      <div className="overflow-y-auto flex-1 p-2">
+        {/* Shapes */}
+        <div className="mb-2">
+          <h4 className="text-[10px] font-medium text-blue-400 mb-1.5 uppercase tracking-wider px-1">Shapes</h4>
+          <div className="grid grid-cols-2 gap-1">
+            {nodeCategories.shapes.map((node) => (
+              <button
+                key={node.type}
+                onClick={() => onAddNode(node.type)}
+                className="text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5"
+                title={node.description}
+              >
+                <span className="w-4 text-center text-[10px] opacity-60">{getIcon(node.type)}</span>
+                <span className="truncate">{node.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Iteration */}
+        <div className="mb-2">
+          <h4 className="text-[10px] font-medium text-cyan-400 mb-1.5 uppercase tracking-wider px-1">Iteration</h4>
+          <div className="grid grid-cols-2 gap-1">
+            {nodeCategories.iteration.map((node) => (
+              <button
+                key={node.type}
+                onClick={() => onAddNode(node.type)}
+                className="text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5"
+                title={node.description}
+              >
+                <span className="w-4 text-center text-[10px] opacity-60">{getIcon(node.type)}</span>
+                <span className="truncate">{node.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Transform */}
+        <div className="mb-2">
+          <h4 className="text-[10px] font-medium text-amber-400 mb-1.5 uppercase tracking-wider px-1">Transform</h4>
+          <div className="grid grid-cols-2 gap-1">
+            {nodeCategories.transform.map((node) => (
+              <button
+                key={node.type}
+                onClick={() => onAddNode(node.type)}
+                className="text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5"
+                title={node.description}
+              >
+                <span className="w-4 text-center text-[10px] opacity-60">{getIcon(node.type)}</span>
+                <span className="truncate">{node.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Algorithmic */}
+        <div className="mb-2">
+          <h4 className="text-[10px] font-medium text-pink-400 mb-1.5 uppercase tracking-wider px-1">Algorithmic</h4>
+          <div className="grid grid-cols-2 gap-1">
+            {nodeCategories.algorithmic.map((node) => (
+              <button
+                key={node.type}
+                onClick={() => onAddNode(node.type)}
+                className="text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5"
+                title={node.description}
+              >
+                <span className="w-4 text-center text-[10px] opacity-60">{getIcon(node.type)}</span>
+                <span className="truncate">{node.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Iteration */}
-      <div className="mb-3">
-        <h4 className="text-xs font-medium text-cyan-400 mb-2 uppercase tracking-wider">Iteration</h4>
-        <div className="space-y-1">
-          {nodeCategories.iteration.map((node) => (
-            <button
-              key={node.type}
-              onClick={() => onAddNode(node.type)}
-              className="w-full text-left px-2 py-1.5 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
-              title={node.description}
-            >
-              <span className="w-4 text-center text-xs opacity-60">
-                {node.type === 'repeat' && '#'}
-                {node.type === 'grid' && ':::'}
-                {node.type === 'radial' && '*'}
-              </span>
-              {node.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Transform */}
-      <div className="mb-3">
-        <h4 className="text-xs font-medium text-amber-400 mb-2 uppercase tracking-wider">Transform</h4>
-        <div className="space-y-1">
-          {nodeCategories.transform.map((node) => (
-            <button
-              key={node.type}
-              onClick={() => onAddNode(node.type)}
-              className="w-full text-left px-2 py-1.5 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
-              title={node.description}
-            >
-              <span className="w-4 text-center text-xs opacity-60">
-                {node.type === 'translate' && '↗'}
-                {node.type === 'rotate' && '↻'}
-                {node.type === 'scale' && '⤢'}
-              </span>
-              {node.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Algorithmic */}
-      <div className="mb-3">
-        <h4 className="text-xs font-medium text-pink-400 mb-2 uppercase tracking-wider">Algorithmic</h4>
-        <div className="space-y-1">
-          {nodeCategories.algorithmic.map((node) => (
-            <button
-              key={node.type}
-              onClick={() => onAddNode(node.type)}
-              className="w-full text-left px-2 py-1.5 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
-              title={node.description}
-            >
-              <span className="w-4 text-center text-xs opacity-60">
-                {node.type === 'algorithmic' && 'λ'}
-                {node.type === 'attractor' && '∞'}
-                {node.type === 'lsystem' && '🌿'}
-              </span>
-              {node.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Quick tips */}
-      <div className="mt-4 pt-3 border-t border-slate-700">
-        <p className="text-xs text-slate-500">
-          Drag to pan, scroll to zoom. Connect nodes to create patterns.
+      {/* Footer tip */}
+      <div className="px-3 py-2 border-t border-slate-700 bg-slate-800/50">
+        <p className="text-[10px] text-slate-500">
+          Connect nodes to create patterns
         </p>
       </div>
     </div>

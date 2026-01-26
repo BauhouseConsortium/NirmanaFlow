@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, ChangeEvent } from 'react';
 import {
   ReactFlow,
   Controls,
@@ -25,8 +25,12 @@ import { TransformNode } from './TransformNode';
 import { AlgorithmicNode } from './AlgorithmicNode';
 import { AttractorNode } from './AttractorNode';
 import { LSystemNode } from './LSystemNode';
+import { PathNode } from './PathNode';
+import { CodeNode } from './CodeNode';
 import { CustomEdge } from './CustomEdge';
 import { NodePalette } from './NodePalette';
+import { GlyphEditor } from './GlyphEditor';
+import { CodeEditorModal } from './CodeEditorModal';
 import { nodeDefaults } from './nodeTypes';
 import { executeFlow, type ExecutionResult } from './flowExecutor';
 import type { Path } from '../../utils/drawingApi';
@@ -43,6 +47,8 @@ const nodeTypes = {
   algorithmic: AlgorithmicNode,
   attractor: AttractorNode,
   lsystem: LSystemNode,
+  path: PathNode,
+  code: CodeNode,
 };
 
 // Define custom edge types
@@ -70,8 +76,15 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+  const [glyphEditorOpen, setGlyphEditorOpen] = useState(false);
+  const [glyphEditorText, setGlyphEditorText] = useState('');
+  const [codeEditorOpen, setCodeEditorOpen] = useState(false);
+  const [codeEditorNodeId, setCodeEditorNodeId] = useState('');
+  const [codeEditorCode, setCodeEditorCode] = useState('');
   const nodeIdCounter = useRef(1);
   const groupIdCounter = useRef(0);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [flowName, setFlowName] = useState('untitled');
 
   // Handle edge connections
   const onConnect = useCallback(
@@ -193,6 +206,10 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeType = 'text';
       } else if (type === 'batak') {
         nodeType = 'batak';
+      } else if (type === 'path') {
+        nodeType = 'path';
+      } else if (type === 'code') {
+        nodeType = 'code';
       }
 
       const newNode: Node = {
@@ -267,6 +284,112 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
     onChange?.(result.paths, result);
   }, [nodes, edges, onChange]);
 
+  // Listen for glyph editor open event
+  useEffect(() => {
+    const handleOpenGlyphEditor = (event: Event) => {
+      const { latinText } = (event as CustomEvent).detail;
+      setGlyphEditorText(latinText);
+      setGlyphEditorOpen(true);
+    };
+
+    window.addEventListener('openGlyphEditor', handleOpenGlyphEditor);
+    return () => window.removeEventListener('openGlyphEditor', handleOpenGlyphEditor);
+  }, []);
+
+  // Listen for code editor open event
+  useEffect(() => {
+    const handleOpenCodeEditor = (event: Event) => {
+      const { nodeId, code } = (event as CustomEvent).detail;
+      setCodeEditorNodeId(nodeId);
+      setCodeEditorCode(code);
+      setCodeEditorOpen(true);
+    };
+
+    window.addEventListener('openCodeEditor', handleOpenCodeEditor);
+    return () => window.removeEventListener('openCodeEditor', handleOpenCodeEditor);
+  }, []);
+
+  // Save flow to JSON file
+  const handleSaveFlow = useCallback(() => {
+    const flowData = {
+      version: 1,
+      name: flowName,
+      nodes: nodes,
+      edges: edges,
+      counters: {
+        nodeId: nodeIdCounter.current,
+        groupId: groupIdCounter.current,
+      },
+      savedAt: new Date().toISOString(),
+    };
+
+    const blob = new Blob([JSON.stringify(flowData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${flowName}.nirmana.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [nodes, edges, flowName]);
+
+  // Load flow from JSON file
+  const handleLoadFlow = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const flowData = JSON.parse(content);
+
+        // Validate the flow data
+        if (!flowData.nodes || !flowData.edges) {
+          alert('Invalid flow file: missing nodes or edges');
+          return;
+        }
+
+        // Load the flow
+        setNodes(flowData.nodes);
+        setEdges(flowData.edges);
+
+        // Restore counters if available
+        if (flowData.counters) {
+          nodeIdCounter.current = flowData.counters.nodeId || 1;
+          groupIdCounter.current = flowData.counters.groupId || 0;
+        }
+
+        // Set the flow name
+        if (flowData.name) {
+          setFlowName(flowData.name);
+        } else {
+          // Extract name from filename
+          const name = file.name.replace('.nirmana.json', '').replace('.json', '');
+          setFlowName(name);
+        }
+      } catch (err) {
+        alert('Failed to load flow file: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.readAsText(file);
+
+    // Reset the input so the same file can be loaded again
+    event.target.value = '';
+  }, [setNodes, setEdges]);
+
+  // Clear flow (reset to initial state)
+  const handleClearFlow = useCallback(() => {
+    if (confirm('Clear all nodes? This cannot be undone.')) {
+      setNodes(initialNodes);
+      setEdges(initialEdges);
+      nodeIdCounter.current = 1;
+      groupIdCounter.current = 0;
+      setFlowName('untitled');
+    }
+  }, [setNodes, setEdges]);
+
   // Memoize the dark theme styles
   const flowStyles = useMemo(
     () => ({
@@ -322,6 +445,89 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
           </button>
         </div>
       )}
+
+      {/* Bottom Toolbar */}
+      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+        <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/95 backdrop-blur-sm rounded-lg shadow-lg border border-slate-700">
+          {/* Flow name input */}
+          <input
+            type="text"
+            value={flowName}
+            onChange={(e) => setFlowName(e.target.value)}
+            className="w-32 px-2 py-1 text-sm bg-slate-700 text-white rounded border border-slate-600 focus:border-blue-500 focus:outline-none"
+            placeholder="Flow name"
+          />
+
+          <div className="w-px h-6 bg-slate-600" />
+
+          {/* Load button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors"
+            title="Load flow (JSON)"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            Load
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json,.nirmana.json"
+            onChange={handleLoadFlow}
+            className="hidden"
+          />
+
+          {/* Save button */}
+          <button
+            onClick={handleSaveFlow}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors"
+            title="Save flow (JSON)"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Save
+          </button>
+
+          <div className="w-px h-6 bg-slate-600" />
+
+          {/* Clear button */}
+          <button
+            onClick={handleClearFlow}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded transition-colors"
+            title="Clear all nodes"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Clear
+          </button>
+
+          <div className="w-px h-6 bg-slate-600" />
+
+          {/* Node count */}
+          <span className="text-xs text-slate-500 px-2">
+            {nodes.length} nodes · {edges.length} edges
+          </span>
+        </div>
+      </div>
+
+      {/* Global Glyph Editor Modal */}
+      <GlyphEditor
+        isOpen={glyphEditorOpen}
+        onClose={() => setGlyphEditorOpen(false)}
+        latinText={glyphEditorText}
+      />
+
+      {/* Global Code Editor Modal */}
+      <CodeEditorModal
+        isOpen={codeEditorOpen}
+        onClose={() => setCodeEditorOpen(false)}
+        nodeId={codeEditorNodeId}
+        initialCode={codeEditorCode}
+      />
     </div>
   );
 }
