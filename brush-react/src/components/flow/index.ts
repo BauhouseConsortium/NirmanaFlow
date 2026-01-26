@@ -3,6 +3,8 @@ export { ShapeNode } from './ShapeNode';
 export { IterationNode } from './IterationNode';
 export { OutputNode } from './OutputNode';
 export { TextNode } from './TextNode';
+export { GroupNode } from './GroupNode';
+export { TransformNode } from './TransformNode';
 export { CustomEdge } from './CustomEdge';
 export { NodePalette } from './NodePalette';
 export { executeFlow, executeFlowGraph, type ExecutionResult } from './flowExecutor';

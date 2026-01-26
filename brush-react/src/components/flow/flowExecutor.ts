@@ -176,6 +176,47 @@ function getPathsCentroid(paths: Path[]): Point {
   return count > 0 ? [sumX / count, sumY / count] : [0, 0];
 }
 
+// Apply transform node transformations (single transform)
+function applyTransform(node: Node, inputPaths: Path[]): Path[] {
+  const data = node.data as Record<string, unknown>;
+  const label = ((data.label as string) || '').toLowerCase();
+
+  if (inputPaths.length === 0) return [];
+
+  switch (label) {
+    case 'translate': {
+      const dx = (data.dx as number) || 0;
+      const dy = (data.dy as number) || 0;
+      return transformPaths(inputPaths, dx, dy, 0, 1, 0, 0);
+    }
+
+    case 'rotate': {
+      const angle = (data.angle as number) || 0;
+      const cx = (data.cx as number) || 0;
+      const cy = (data.cy as number) || 0;
+      return transformPaths(inputPaths, 0, 0, angle, 1, cx, cy);
+    }
+
+    case 'scale': {
+      const sx = (data.sx as number) || 1;
+      const sy = (data.sy as number) || 1;
+      const cx = (data.cx as number) || 0;
+      const cy = (data.cy as number) || 0;
+      // For non-uniform scaling, we need to handle it differently
+      return inputPaths.map((path) =>
+        path.map((point) => {
+          const x = (point[0] - cx) * sx + cx;
+          const y = (point[1] - cy) * sy + cy;
+          return [x, y] as Point;
+        })
+      );
+    }
+
+    default:
+      return inputPaths;
+  }
+}
+
 // Apply iteration node transformations
 function applyIteration(node: Node, inputPaths: Path[]): Path[] {
   const data = node.data as Record<string, unknown>;
@@ -292,6 +333,38 @@ export function executeFlowGraph(nodes: Node[], edges: Edge[]): Path[] {
         inputPaths.push(...getNodePaths(source.id));
       }
       paths = applyIteration(node, inputPaths);
+    } else if (node.type === 'transform') {
+      // Transform nodes apply transformations to input paths
+      const inputPaths: Path[] = [];
+      for (const source of sourceNodes) {
+        inputPaths.push(...getNodePaths(source.id));
+      }
+      paths = applyTransform(node, inputPaths);
+    } else if (node.type === 'group') {
+      // Group node - collect paths from child nodes that are terminal (output not connected to siblings)
+      const childNodes = nodes.filter((n) => n.parentId === nodeId);
+
+      if (childNodes.length > 0) {
+        // Find terminal nodes: children whose source handles aren't connected to other children
+        const childIds = new Set(childNodes.map((n) => n.id));
+        const terminalChildren = childNodes.filter((child) => {
+          // A child is terminal if no edge goes FROM this child TO another child in the group
+          const outgoingToSibling = edges.some(
+            (e) => e.source === child.id && childIds.has(e.target)
+          );
+          return !outgoingToSibling;
+        });
+
+        // Collect paths from terminal children
+        for (const terminal of terminalChildren) {
+          paths.push(...getNodePaths(terminal.id));
+        }
+      }
+
+      // Also collect paths from any external sources connected to the group
+      for (const source of sourceNodes) {
+        paths.push(...getNodePaths(source.id));
+      }
     } else if (node.type === 'output') {
       // Output node just collects paths from sources
       for (const source of sourceNodes) {

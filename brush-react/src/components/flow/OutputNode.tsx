@@ -12,7 +12,7 @@ type OutputNodeProps = {
 function OutputNodeComponent({ data }: OutputNodeProps) {
   return (
     <div
-      className="flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-500/50"
+      className="flex items-center gap-2 px-4 py-2 rounded-full border-2 border-emerald-500"
       style={{ backgroundColor: '#1e293b' }}
     >
       <Handle

@@ -37,6 +37,14 @@ body {
 .react-flow__node-output,
 .react-flow__node-shape,
 .react-flow__node-iteration,
-.react-flow__node-text {
+.react-flow__node-text,
+.react-flow__node-group,
+.react-flow__node-transform {
   background: transparent !important;
+}
+
+/* Selection box styling */
+.react-flow__selection {
+  background: rgba(139, 92, 246, 0.1) !important;
+  border: 1px dashed #8b5cf6 !important;
 }
