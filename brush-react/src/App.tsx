@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Allotment } from 'allotment';
 import 'allotment/dist/style.css';
 
@@ -178,6 +178,25 @@ export default function App() {
     }
   }, [gcodeResult, fluidNC, log]);
 
+  // Memoize gcodeLines to prevent unnecessary re-renders of VectorPreview
+  const gcodeLines = useMemo(() => gcodeResult?.lines ?? [], [gcodeResult?.lines]);
+
+  // Memoize streaming callbacks to prevent re-renders
+  const handlePauseStreaming = useCallback(() => {
+    fluidNC.pauseStreaming();
+    log('Streaming paused', 'warning');
+  }, [fluidNC, log]);
+
+  const handleResumeStreaming = useCallback(() => {
+    fluidNC.resumeStreaming();
+    log('Streaming resumed', 'info');
+  }, [fluidNC, log]);
+
+  const handleCancelStreaming = useCallback(() => {
+    fluidNC.cancelStreaming();
+    log('Streaming cancelled', 'warning');
+  }, [fluidNC, log]);
+
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-white overflow-hidden">
       {/* Header */}
@@ -232,7 +251,7 @@ export default function App() {
                     paths={paths}
                     width={settings.canvasWidth}
                     height={settings.canvasHeight}
-                    gcodeLines={gcodeResult?.lines || []}
+                    gcodeLines={gcodeLines}
                     showSimulation={true}
                     machinePosition={fluidNC.status.position}
                     isConnected={fluidNC.isConnected}
@@ -265,18 +284,9 @@ export default function App() {
                     <div className="mt-3">
                       <StreamingProgress
                         streaming={fluidNC.streaming}
-                        onPause={() => {
-                          fluidNC.pauseStreaming();
-                          log('Streaming paused', 'warning');
-                        }}
-                        onResume={() => {
-                          fluidNC.resumeStreaming();
-                          log('Streaming resumed', 'info');
-                        }}
-                        onCancel={() => {
-                          fluidNC.cancelStreaming();
-                          log('Streaming cancelled', 'warning');
-                        }}
+                        onPause={handlePauseStreaming}
+                        onResume={handleResumeStreaming}
+                        onCancel={handleCancelStreaming}
                       />
                     </div>
                   )}

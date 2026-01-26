@@ -1,5 +1,6 @@
 /**
  * Flow Executor - Converts node graph to drawing paths
+ * Uses Zod schemas for safe data extraction
  */
 
 import type { Node, Edge } from '@xyflow/react';
@@ -7,6 +8,58 @@ import type { Path, Point } from '../../utils/drawingApi';
 import { renderText } from './strokeFont';
 import { transliterateToba } from '../../utils/transliteration';
 import { glyphs } from '../../data/glyphs';
+import {
+  nodeSchemaMap,
+  type NodeType,
+  type LineNodeData,
+  type RectNodeData,
+  type CircleNodeData,
+  type EllipseNodeData,
+  type ArcNodeData,
+  type PolygonNodeData,
+  type RepeatNodeData,
+  type GridNodeData,
+  type RadialNodeData,
+  type TranslateNodeData,
+  type RotateNodeData,
+  type ScaleNodeData,
+  type AlgorithmicNodeData,
+  type AttractorNodeData,
+  type LSystemNodeData,
+  type PathNodeData,
+  type CodeNodeData,
+  type TextNodeData,
+  type BatakTextNodeData,
+} from '../../schemas/flowNodeSchemas';
+
+/**
+ * Safely parse node data using Zod schema
+ * Returns validated data or null if invalid
+ */
+function parseNodeData<T extends NodeType>(
+  nodeType: T,
+  data: unknown
+): ReturnType<typeof nodeSchemaMap[T]['safeParse']>['data'] | null {
+  const schema = nodeSchemaMap[nodeType];
+  if (!schema) return null;
+
+  const result = schema.safeParse(data);
+  return result.success ? result.data : null;
+}
+
+/**
+ * Get node data with fallback to defaults
+ * Uses Zod schema defaults for missing fields
+ */
+function getNodeDataSafe<T extends NodeType>(
+  nodeType: T,
+  data: Record<string, unknown>,
+  defaults: Partial<Record<string, unknown>>
+): Record<string, unknown> {
+  // Merge data with defaults, data takes precedence
+  const merged = { ...defaults, ...data };
+  return merged;
+}
 
 // Get all source nodes that connect to a target node
 function getSourceNodes(targetId: string, nodes: Node[], edges: Edge[]): Node[] {
@@ -16,7 +69,7 @@ function getSourceNodes(targetId: string, nodes: Node[], edges: Edge[]): Node[] 
     .filter((n): n is Node => n !== undefined);
 }
 
-// Generate paths from a shape node
+// Generate paths from a shape node using Zod-validated data
 function generateShapePaths(node: Node): Path[] {
   const data = node.data as Record<string, unknown>;
   const label = ((data.label as string) || '').toLowerCase();
@@ -24,19 +77,15 @@ function generateShapePaths(node: Node): Path[] {
 
   switch (label) {
     case 'line': {
-      const x1 = (data.x1 as number) || 0;
-      const y1 = (data.y1 as number) || 0;
-      const x2 = (data.x2 as number) || 0;
-      const y2 = (data.y2 as number) || 0;
+      const validated = parseNodeData('line', data) as LineNodeData | null;
+      const { x1, y1, x2, y2 } = validated ?? { x1: 0, y1: 0, x2: 0, y2: 0 };
       paths.push([[x1, y1], [x2, y2]]);
       break;
     }
 
     case 'rectangle': {
-      const x = (data.x as number) || 0;
-      const y = (data.y as number) || 0;
-      const w = (data.width as number) || 20;
-      const h = (data.height as number) || 20;
+      const validated = parseNodeData('rect', data) as RectNodeData | null;
+      const { x, y, width: w, height: h } = validated ?? { x: 0, y: 0, width: 20, height: 20 };
       paths.push([
         [x, y],
         [x + w, y],
@@ -48,10 +97,8 @@ function generateShapePaths(node: Node): Path[] {
     }
 
     case 'circle': {
-      const cx = (data.cx as number) || 50;
-      const cy = (data.cy as number) || 50;
-      const r = (data.radius as number) || 20;
-      const segments = (data.segments as number) || 36;
+      const validated = parseNodeData('circle', data) as CircleNodeData | null;
+      const { cx, cy, radius: r, segments } = validated ?? { cx: 50, cy: 50, radius: 20, segments: 36 };
       const points: Point[] = [];
       for (let i = 0; i <= segments; i++) {
         const angle = (i / segments) * Math.PI * 2;
@@ -62,11 +109,8 @@ function generateShapePaths(node: Node): Path[] {
     }
 
     case 'ellipse': {
-      const cx = (data.cx as number) || 50;
-      const cy = (data.cy as number) || 50;
-      const rx = (data.rx as number) || 30;
-      const ry = (data.ry as number) || 20;
-      const segments = (data.segments as number) || 36;
+      const validated = parseNodeData('ellipse', data) as EllipseNodeData | null;
+      const { cx, cy, rx, ry, segments } = validated ?? { cx: 50, cy: 50, rx: 30, ry: 20, segments: 36 };
       const points: Point[] = [];
       for (let i = 0; i <= segments; i++) {
         const angle = (i / segments) * Math.PI * 2;
@@ -77,12 +121,10 @@ function generateShapePaths(node: Node): Path[] {
     }
 
     case 'arc': {
-      const cx = (data.cx as number) || 50;
-      const cy = (data.cy as number) || 50;
-      const r = (data.radius as number) || 20;
-      const startAngle = (data.startAngle as number) || 0;
-      const endAngle = (data.endAngle as number) || 90;
-      const segments = (data.segments as number) || 24;
+      const validated = parseNodeData('arc', data) as ArcNodeData | null;
+      const { cx, cy, radius: r, startAngle, endAngle, segments } = validated ?? {
+        cx: 50, cy: 50, radius: 20, startAngle: 0, endAngle: 90, segments: 24
+      };
       const startRad = (startAngle * Math.PI) / 180;
       const endRad = (endAngle * Math.PI) / 180;
       const range = endRad - startRad;
@@ -96,10 +138,8 @@ function generateShapePaths(node: Node): Path[] {
     }
 
     case 'polygon': {
-      const sides = (data.sides as number) || 6;
-      const cx = (data.cx as number) || 50;
-      const cy = (data.cy as number) || 50;
-      const r = (data.radius as number) || 20;
+      const validated = parseNodeData('polygon', data) as PolygonNodeData | null;
+      const { sides, cx, cy, radius: r } = validated ?? { sides: 6, cx: 50, cy: 50, radius: 20 };
       const points: Point[] = [];
       for (let i = 0; i <= sides; i++) {
         const angle = (i / sides) * Math.PI * 2 - Math.PI / 2; // Start from top
@@ -299,18 +339,17 @@ function expandLSystem(axiom: string, rules: Map<string, string>, iterations: nu
   return current;
 }
 
-// Apply L-System transformation to input paths
+// Apply L-System transformation to input paths using Zod-validated data
 function applyLSystem(node: Node, inputPaths: Path[]): Path[] {
   const data = node.data as Record<string, unknown>;
-  const axiom = (data.axiom as string) || 'F';
-  const rulesStr = (data.rules as string) || 'F=F+F-F-F+F';
-  const iterations = Math.max(1, Math.min(8, (data.iterations as number) || 3));
-  const angle = (data.angle as number) ?? 90;
-  const stepSize = (data.stepSize as number) ?? 10;
-  const startX = (data.startX as number) ?? 75;
-  const startY = (data.startY as number) ?? 100;
-  const startAngle = (data.startAngle as number) ?? -90;
-  const scalePerIter = (data.scalePerIter as number) ?? 1;
+  const validated = parseNodeData('lsystem', data) as LSystemNodeData | null;
+  const {
+    axiom, rules: rulesStr, iterations, angle, stepSize,
+    startX, startY, startAngle, scalePerIter
+  } = validated ?? {
+    axiom: 'F', rules: 'F=F+F-F-F+F', iterations: 3, angle: 90, stepSize: 10,
+    startX: 75, startY: 100, startAngle: -90, scalePerIter: 1
+  };
 
   if (inputPaths.length === 0) return [];
 
@@ -518,30 +557,28 @@ function getPathLength(
   return length;
 }
 
-// Apply path layout to input paths (text along path)
+// Apply path layout to input paths (text along path) using Zod-validated data
 function applyPathLayout(node: Node, inputPaths: Path[]): Path[] {
   if (inputPaths.length === 0) return [];
 
   const data = node.data as Record<string, unknown>;
-  const pathType = (data.pathType as PathType) || 'circle';
-  const align = (data.align as string) || 'start';
-  const spacing = (data.spacing as number) ?? 1;
-  const reverse = (data.reverse as boolean) || false;
+  const validated = parseNodeData('path', data) as PathNodeData | null;
+  const {
+    pathType, align, spacing, reverse,
+    cx, cy, radius, startAngle, endAngle,
+    x1, y1, x2, y2,
+    amplitude, frequency, turns, growth
+  } = validated ?? {
+    pathType: 'circle' as const, align: 'start' as const, spacing: 1, reverse: false,
+    cx: 75, cy: 60, radius: 40, startAngle: 0, endAngle: 180,
+    x1: 10, y1: 60, x2: 140, y2: 60,
+    amplitude: 20, frequency: 2, turns: 3, growth: 5
+  };
 
   const params = {
-    cx: data.cx as number,
-    cy: data.cy as number,
-    radius: data.radius as number,
-    startAngle: data.startAngle as number,
-    endAngle: data.endAngle as number,
-    x1: data.x1 as number,
-    y1: data.y1 as number,
-    x2: data.x2 as number,
-    y2: data.y2 as number,
-    amplitude: data.amplitude as number,
-    frequency: data.frequency as number,
-    turns: data.turns as number,
-    growth: data.growth as number,
+    cx, cy, radius, startAngle, endAngle,
+    x1, y1, x2, y2,
+    amplitude, frequency, turns, growth,
   };
 
   // Calculate input paths bounding box to determine character width
@@ -614,18 +651,14 @@ function applyPathLayout(node: Node, inputPaths: Path[]): Path[] {
   return resultPaths;
 }
 
-// Generate attractor paths
+// Generate attractor paths using Zod-validated data
 function generateAttractor(node: Node): Path[] {
   const data = node.data as Record<string, unknown>;
-  const type = (data.type as string) || 'clifford';
-  const iterations = Math.max(100, Math.min(50000, (data.iterations as number) || 5000));
-  const a = (data.a as number) ?? -1.4;
-  const b = (data.b as number) ?? 1.6;
-  const c = (data.c as number) ?? 1.0;
-  const d = (data.d as number) ?? 0.7;
-  const scale = (data.scale as number) ?? 20;
-  const centerX = (data.centerX as number) ?? 75;
-  const centerY = (data.centerY as number) ?? 60;
+  const validated = parseNodeData('attractor', data) as AttractorNodeData | null;
+  const { type, iterations, a, b, c, d, scale, centerX, centerY } = validated ?? {
+    type: 'clifford' as const, iterations: 5000, a: -1.4, b: 1.6, c: 1.0, d: 0.7,
+    scale: 20, centerX: 75, centerY: 60
+  };
 
   const points: Point[] = [];
   let x = 0.1;
@@ -735,18 +768,14 @@ function evaluateFormula(formula: string, t: number): number {
   }
 }
 
-// Apply algorithmic (bytebeat) node transformations
+// Apply algorithmic (bytebeat) node transformations using Zod-validated data
 function applyAlgorithmic(node: Node, inputPaths: Path[]): Path[] {
   const data = node.data as Record<string, unknown>;
-  const formula = (data.formula as string) || 't*(t>>5|t>>8)';
-  const count = Math.max(1, Math.min(256, Math.floor((data.count as number) || 16)));
-  const mode = (data.mode as string) || 'position';
-  const xScale = (data.xScale as number) ?? 0.5;
-  const yScale = (data.yScale as number) ?? 0.5;
-  const rotScale = (data.rotScale as number) ?? 1;
-  const sclScale = (data.sclScale as number) ?? 0.01;
-  const baseX = (data.baseX as number) ?? 75;
-  const baseY = (data.baseY as number) ?? 60;
+  const validated = parseNodeData('algorithmic', data) as AlgorithmicNodeData | null;
+  const { formula, count, mode, xScale, yScale, rotScale, sclScale, baseX, baseY } = validated ?? {
+    formula: 't*(t>>5|t>>8)', count: 16, mode: 'position' as const,
+    xScale: 0.5, yScale: 0.5, rotScale: 1, sclScale: 0.01, baseX: 75, baseY: 60
+  };
 
   if (inputPaths.length === 0) return [];
 
@@ -1006,10 +1035,11 @@ function createCodeApi() {
   };
 }
 
-// Execute code node with sandboxed environment
+// Execute code node with sandboxed environment using Zod-validated data
 function executeCodeNode(node: Node, inputPaths: Path[]): { paths: Path[]; error?: string } {
   const data = node.data as Record<string, unknown>;
-  const code = (data.code as string) || 'return input;';
+  const validated = parseNodeData('code', data) as CodeNodeData | null;
+  const { code } = validated ?? { code: 'return input;' };
 
   try {
     // Create the API
@@ -1082,7 +1112,7 @@ function executeCodeNode(node: Node, inputPaths: Path[]): { paths: Path[]; error
   }
 }
 
-// Apply transform node transformations (single transform)
+// Apply transform node transformations (single transform) using Zod-validated data
 function applyTransform(node: Node, inputPaths: Path[]): Path[] {
   const data = node.data as Record<string, unknown>;
   const label = ((data.label as string) || '').toLowerCase();
@@ -1091,23 +1121,20 @@ function applyTransform(node: Node, inputPaths: Path[]): Path[] {
 
   switch (label) {
     case 'translate': {
-      const dx = (data.dx as number) || 0;
-      const dy = (data.dy as number) || 0;
+      const validated = parseNodeData('translate', data) as TranslateNodeData | null;
+      const { dx, dy } = validated ?? { dx: 0, dy: 0 };
       return transformPaths(inputPaths, dx, dy, 0, 1, 0, 0);
     }
 
     case 'rotate': {
-      const angle = (data.angle as number) || 0;
-      const cx = (data.cx as number) || 0;
-      const cy = (data.cy as number) || 0;
+      const validated = parseNodeData('rotate', data) as RotateNodeData | null;
+      const { angle, cx, cy } = validated ?? { angle: 0, cx: 0, cy: 0 };
       return transformPaths(inputPaths, 0, 0, angle, 1, cx, cy);
     }
 
     case 'scale': {
-      const sx = (data.sx as number) || 1;
-      const sy = (data.sy as number) || 1;
-      const cx = (data.cx as number) || 0;
-      const cy = (data.cy as number) || 0;
+      const validated = parseNodeData('scale', data) as ScaleNodeData | null;
+      const { sx, sy, cx, cy } = validated ?? { sx: 1, sy: 1, cx: 0, cy: 0 };
       // For non-uniform scaling, we need to handle it differently
       return inputPaths.map((path) =>
         path.map((point) => {
@@ -1123,7 +1150,7 @@ function applyTransform(node: Node, inputPaths: Path[]): Path[] {
   }
 }
 
-// Apply iteration node transformations
+// Apply iteration node transformations using Zod-validated data
 function applyIteration(node: Node, inputPaths: Path[]): Path[] {
   const data = node.data as Record<string, unknown>;
   const label = ((data.label as string) || '').toLowerCase();
@@ -1133,11 +1160,10 @@ function applyIteration(node: Node, inputPaths: Path[]): Path[] {
 
   switch (label) {
     case 'repeat': {
-      const count = Math.max(1, Math.floor((data.count as number) || 5));
-      const offsetX = (data.offsetX as number) || 0;
-      const offsetY = (data.offsetY as number) || 0;
-      const rotation = (data.rotation as number) || 0;
-      const scale = (data.scale as number) || 1;
+      const validated = parseNodeData('repeat', data) as RepeatNodeData | null;
+      const { count, offsetX, offsetY, rotation, scale } = validated ?? {
+        count: 5, offsetX: 0, offsetY: 0, rotation: 0, scale: 1
+      };
       const centroid = getPathsCentroid(inputPaths);
 
       for (let i = 0; i < count; i++) {
@@ -1152,12 +1178,10 @@ function applyIteration(node: Node, inputPaths: Path[]): Path[] {
     }
 
     case 'grid': {
-      const cols = Math.max(1, Math.floor((data.cols as number) || 3));
-      const rows = Math.max(1, Math.floor((data.rows as number) || 3));
-      const spacingX = (data.spacingX as number) || 30;
-      const spacingY = (data.spacingY as number) || 30;
-      const startX = (data.startX as number) || 0;
-      const startY = (data.startY as number) || 0;
+      const validated = parseNodeData('grid', data) as GridNodeData | null;
+      const { cols, rows, spacingX, spacingY, startX, startY } = validated ?? {
+        cols: 3, rows: 3, spacingX: 30, spacingY: 30, startX: 0, startY: 0
+      };
 
       // Get the original centroid to offset properly
       const centroid = getPathsCentroid(inputPaths);
@@ -1174,11 +1198,10 @@ function applyIteration(node: Node, inputPaths: Path[]): Path[] {
     }
 
     case 'radial': {
-      const count = Math.max(1, Math.floor((data.count as number) || 8));
-      const cx = (data.cx as number) || 75;
-      const cy = (data.cy as number) || 60;
-      const radius = (data.radius as number) || 40;
-      const startAngle = (data.startAngle as number) || 0;
+      const validated = parseNodeData('radial', data) as RadialNodeData | null;
+      const { count, cx, cy, radius, startAngle } = validated ?? {
+        count: 8, cx: 75, cy: 60, radius: 40, startAngle: 0
+      };
 
       const centroid = getPathsCentroid(inputPaths);
 
@@ -1227,21 +1250,20 @@ export function executeFlowGraph(nodes: Node[], edges: Edge[]): Path[] {
       // Attractor nodes generate strange attractor paths
       paths = generateAttractor(node);
     } else if (node.type === 'text') {
-      // Text nodes render text as stroke paths
+      // Text nodes render text as stroke paths using Zod-validated data
       const data = node.data as Record<string, unknown>;
-      const text = (data.text as string) || '';
-      const x = (data.x as number) || 0;
-      const y = (data.y as number) || 0;
-      const size = (data.size as number) || 10;
-      const spacing = (data.spacing as number) || 1.2;
+      const validated = parseNodeData('text', data) as TextNodeData | null;
+      const { text, x, y, size, spacing } = validated ?? {
+        text: '', x: 0, y: 0, size: 10, spacing: 1.2
+      };
       paths = renderText(text, { x, y, size, spacing });
     } else if (node.type === 'batak') {
-      // Batak text nodes render Batak script from Latin transliteration
+      // Batak text nodes render Batak script using Zod-validated data
       const data = node.data as Record<string, unknown>;
-      const text = (data.text as string) || '';
-      const x = (data.x as number) || 10;
-      const y = (data.y as number) || 50;
-      const size = (data.size as number) || 30;
+      const validated = parseNodeData('batak', data) as BatakTextNodeData | null;
+      const { text, x, y, size } = validated ?? {
+        text: '', x: 10, y: 50, size: 30
+      };
       paths = renderBatakText(text, { x, y, size });
     } else if (node.type === 'iteration') {
       // Iteration nodes transform input paths

@@ -1,61 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  type ConnectionState,
+  type MachineState,
+  type StreamingState,
+  type MachinePosition,
+  type FluidNCStatus,
+  type StreamingProgress,
+  INITIAL_STATUS,
+  INITIAL_STREAMING,
+  parseStatusMessage as parseStatusMessageZod,
+  hasPositionChanged,
+} from '../schemas/fluidNCSchemas';
 
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error';
-export type MachineState = 'Idle' | 'Run' | 'Hold' | 'Alarm' | 'Check' | 'Home' | 'Sleep' | 'Unknown';
-export type StreamingState = 'idle' | 'streaming' | 'paused' | 'completed' | 'error';
-
-export interface MachinePosition {
-  x: number;
-  y: number;
-  z: number;
-}
-
-export interface FluidNCStatus {
-  connectionState: ConnectionState;
-  machineState: MachineState;
-  position: MachinePosition;
-  feedRate: number;
-  spindleSpeed: number;
-  override?: {
-    feed: number;
-    rapid: number;
-    spindle: number;
-  };
-  lastMessage: string;
-  lastError: string | null;
-}
-
-export interface StreamingProgress {
-  state: StreamingState;
-  currentLine: number;
-  totalLines: number;
-  percentage: number;
-  currentCommand: string;
-  startTime: number | null;
-  elapsedTime: number;
-  errors: string[];
-}
-
-const INITIAL_STATUS: FluidNCStatus = {
-  connectionState: 'disconnected',
-  machineState: 'Unknown',
-  position: { x: 0, y: 0, z: 0 },
-  feedRate: 0,
-  spindleSpeed: 0,
-  lastMessage: '',
-  lastError: null,
-};
-
-const INITIAL_STREAMING: StreamingProgress = {
-  state: 'idle',
-  currentLine: 0,
-  totalLines: 0,
-  percentage: 0,
-  currentCommand: '',
-  startTime: null,
-  elapsedTime: 0,
-  errors: [],
-};
+// Re-export types for consumers
+export type { ConnectionState, MachineState, StreamingState, MachinePosition, FluidNCStatus, StreamingProgress };
 
 export interface UseFluidNCOptions {
   autoConnect?: boolean;
@@ -91,46 +49,26 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
   const sendNextRef = useRef<(() => void) | null>(null);
   const maxPendingOks = 1; // Conservative: wait for ok before sending next (safer for FluidNC)
 
-  // Parse FluidNC status message
+  // Track last position for throttling updates
+  const lastPositionRef = useRef<MachinePosition>({ x: 0, y: 0, z: 0 });
+
+  // Parse FluidNC status message using Zod-validated parser
   const parseStatusMessage = useCallback((data: string) => {
-    // Format: <State|MPos:X,Y,Z|FS:Feed,Spindle|Ov:F,R,S|...>
-    const match = data.match(/<([^|>]+)(.*)>/);
-    if (!match) return;
+    const updates = parseStatusMessageZod(data);
+    if (!updates) return;
 
-    const state = match[1] as MachineState;
-    const fields = match[2].split('|').filter(Boolean);
-
-    const updates: Partial<FluidNCStatus> = {
-      machineState: state,
-      lastMessage: data,
-    };
-
-    for (const field of fields) {
-      const colonIndex = field.indexOf(':');
-      if (colonIndex === -1) continue;
-
-      const key = field.substring(0, colonIndex);
-      const value = field.substring(colonIndex + 1);
-
-      switch (key) {
-        case 'MPos':
-        case 'WPos': {
-          const [x, y, z] = value.split(',').map(Number);
-          updates.position = { x, y, z };
-          break;
+    // Throttle position updates - only update if position changed meaningfully
+    if (updates.position) {
+      if (!hasPositionChanged(lastPositionRef.current, updates.position, 0.01)) {
+        // Position hasn't changed significantly, skip position update
+        const { position: _, ...otherUpdates } = updates;
+        if (Object.keys(otherUpdates).length > 0) {
+          setStatus(prev => ({ ...prev, ...otherUpdates }));
         }
-        case 'FS': {
-          const [feed, spindle] = value.split(',').map(Number);
-          updates.feedRate = feed;
-          updates.spindleSpeed = spindle;
-          break;
-        }
-        case 'Ov': {
-          const [feed, rapid, spindle] = value.split(',').map(Number);
-          updates.override = { feed, rapid, spindle };
-          break;
-        }
+        return;
       }
+      // Position changed, update ref
+      lastPositionRef.current = updates.position;
     }
 
     setStatus(prev => ({ ...prev, ...updates }));

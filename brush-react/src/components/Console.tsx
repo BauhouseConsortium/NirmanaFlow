@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, memo } from 'react';
 import type { LogEntry } from '../hooks/useConsole';
 
 interface ConsoleProps {
@@ -13,7 +13,7 @@ const typeStyles: Record<LogEntry['type'], string> = {
   warning: 'text-yellow-400',
 };
 
-export function Console({ logs, onClear }: ConsoleProps) {
+function ConsoleComponent({ logs, onClear }: ConsoleProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -54,3 +54,6 @@ export function Console({ logs, onClear }: ConsoleProps) {
     </div>
   );
 }
+
+// Memoize to prevent re-renders when unrelated parent state changes
+export const Console = memo(ConsoleComponent);

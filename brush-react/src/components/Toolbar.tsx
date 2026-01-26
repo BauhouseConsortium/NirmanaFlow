@@ -1,3 +1,5 @@
+import { memo } from 'react';
+
 interface ToolbarProps {
   onRun: () => void;
   onExportSVG: () => void;
@@ -10,7 +12,7 @@ interface ToolbarProps {
   isStreaming: boolean;
 }
 
-export function Toolbar({
+function ToolbarComponent({
   onRun,
   onExportSVG,
   onExportGCode,
@@ -97,3 +99,6 @@ export function Toolbar({
     </div>
   );
 }
+
+// Memoize to prevent re-renders when parent state changes
+export const Toolbar = memo(ToolbarComponent);

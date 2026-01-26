@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback } from 'react';
+import { useRef, useEffect, useState, useCallback, useMemo, memo } from 'react';
 import type { Path } from '../utils/drawingApi';
 
 interface MachinePosition {
@@ -16,6 +16,9 @@ interface VectorPreviewProps {
   machinePosition?: MachinePosition | null;
   isConnected?: boolean;
 }
+
+// Stable empty array for default prop
+const EMPTY_GCODE_LINES: string[] = [];
 
 interface GCodeMove {
   type: 'G0' | 'G1' | 'G4';
@@ -98,11 +101,11 @@ function parseGCodeToMoves(lines: string[]): { moves: GCodeMove[]; totalTime: nu
   return { moves, totalTime: cumulativeTime };
 }
 
-export function VectorPreview({
+function VectorPreviewComponent({
   paths,
   width,
   height,
-  gcodeLines = [],
+  gcodeLines = EMPTY_GCODE_LINES,
   showSimulation = false,
   machinePosition = null,
   isConnected = false,
@@ -115,6 +118,12 @@ export function VectorPreview({
   const [simulationProgress, setSimulationProgress] = useState(0);
   const [simulationSpeed, setSimulationSpeed] = useState(5);
   const [currentInfo, setCurrentInfo] = useState('');
+
+  // Memoize parsed G-code moves to avoid re-parsing on every render
+  const parsedGCode = useMemo(() => {
+    if (gcodeLines.length === 0) return { moves: [], totalTime: 0 };
+    return parseGCodeToMoves(gcodeLines);
+  }, [gcodeLines]);
 
   // Responsive sizing
   useEffect(() => {
@@ -337,21 +346,20 @@ export function VectorPreview({
     }
   }, [machinePosition, isConnected, isSimulating, drawCanvas]);
 
-  // Simulation
+  // Simulation - use memoized parsedGCode
   useEffect(() => {
-    if (!isSimulating || gcodeLines.length === 0) {
+    if (!isSimulating || parsedGCode.moves.length === 0) {
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
+      if (isSimulating && parsedGCode.moves.length === 0) {
+        setIsSimulating(false);
+      }
       return;
     }
 
-    const { moves, totalTime } = parseGCodeToMoves(gcodeLines);
-    if (moves.length === 0) {
-      setIsSimulating(false);
-      return;
-    }
+    const { moves, totalTime } = parsedGCode;
 
     let startTimestamp: number | null = null;
     const speed = simulationSpeed * 10;
@@ -410,7 +418,7 @@ export function VectorPreview({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isSimulating, gcodeLines, simulationSpeed, drawCanvas]);
+  }, [isSimulating, parsedGCode, simulationSpeed, drawCanvas]);
 
   return (
     <div className="space-y-2">
@@ -481,3 +489,37 @@ export function VectorPreview({
     </div>
   );
 }
+
+// Memoized component to prevent unnecessary re-renders
+export const VectorPreview = memo(VectorPreviewComponent, (prev, next) => {
+  // Custom comparison - only re-render if meaningful props changed
+  if (prev.width !== next.width) return false;
+  if (prev.height !== next.height) return false;
+  if (prev.showSimulation !== next.showSimulation) return false;
+  if (prev.isConnected !== next.isConnected) return false;
+
+  // Compare paths by reference first, then by length
+  if (prev.paths !== next.paths) {
+    if (prev.paths.length !== next.paths.length) return false;
+  }
+
+  // Compare gcodeLines by reference
+  if (prev.gcodeLines !== next.gcodeLines) {
+    if (prev.gcodeLines?.length !== next.gcodeLines?.length) return false;
+  }
+
+  // Machine position - allow some tolerance for jitter
+  if (prev.machinePosition !== next.machinePosition) {
+    if (!prev.machinePosition || !next.machinePosition) return false;
+    const threshold = 0.1;
+    if (
+      Math.abs(prev.machinePosition.x - next.machinePosition.x) > threshold ||
+      Math.abs(prev.machinePosition.y - next.machinePosition.y) > threshold ||
+      Math.abs(prev.machinePosition.z - next.machinePosition.z) > threshold
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+});

@@ -51,9 +51,9 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
   }
 
   return (
-    <div className="bg-slate-800/95 backdrop-blur-sm rounded-lg border border-slate-700 shadow-lg w-52 max-h-[calc(100vh-120px)] overflow-hidden flex flex-col">
+    <div className="bg-slate-800/95 backdrop-blur-sm rounded-lg border border-slate-700 shadow-lg w-64 max-h-[calc(100vh-120px)] overflow-hidden flex flex-col">
       {/* Header with collapse button */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-slate-700">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-700">
         <h3 className="text-sm font-semibold text-slate-300">Add Node</h3>
         <button
           onClick={() => setIsExpanded(false)}
@@ -67,19 +67,19 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
       </div>
 
       {/* Scrollable content */}
-      <div className="overflow-y-auto flex-1 p-2">
+      <div className="overflow-y-auto flex-1 p-3">
         {/* Shapes */}
-        <div className="mb-2">
-          <h4 className="text-[10px] font-medium text-blue-400 mb-1.5 uppercase tracking-wider px-1">Shapes</h4>
+        <div className="mb-3">
+          <h4 className="text-xs font-medium text-blue-400 mb-2 uppercase tracking-wider px-1">Shapes</h4>
           <div className="grid grid-cols-2 gap-1">
             {nodeCategories.shapes.map((node) => (
               <button
                 key={node.type}
                 onClick={() => onAddNode(node.type)}
-                className="text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5"
+                className="text-left px-2.5 py-2 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
                 title={node.description}
               >
-                <span className="w-4 text-center text-[10px] opacity-60">{getIcon(node.type)}</span>
+                <span className="w-5 text-center text-xs opacity-60">{getIcon(node.type)}</span>
                 <span className="truncate">{node.label}</span>
               </button>
             ))}
@@ -87,17 +87,17 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
         </div>
 
         {/* Iteration */}
-        <div className="mb-2">
-          <h4 className="text-[10px] font-medium text-cyan-400 mb-1.5 uppercase tracking-wider px-1">Iteration</h4>
+        <div className="mb-3">
+          <h4 className="text-xs font-medium text-cyan-400 mb-2 uppercase tracking-wider px-1">Iteration</h4>
           <div className="grid grid-cols-2 gap-1">
             {nodeCategories.iteration.map((node) => (
               <button
                 key={node.type}
                 onClick={() => onAddNode(node.type)}
-                className="text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5"
+                className="text-left px-2.5 py-2 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
                 title={node.description}
               >
-                <span className="w-4 text-center text-[10px] opacity-60">{getIcon(node.type)}</span>
+                <span className="w-5 text-center text-xs opacity-60">{getIcon(node.type)}</span>
                 <span className="truncate">{node.label}</span>
               </button>
             ))}
@@ -105,17 +105,17 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
         </div>
 
         {/* Transform */}
-        <div className="mb-2">
-          <h4 className="text-[10px] font-medium text-amber-400 mb-1.5 uppercase tracking-wider px-1">Transform</h4>
+        <div className="mb-3">
+          <h4 className="text-xs font-medium text-amber-400 mb-2 uppercase tracking-wider px-1">Transform</h4>
           <div className="grid grid-cols-2 gap-1">
             {nodeCategories.transform.map((node) => (
               <button
                 key={node.type}
                 onClick={() => onAddNode(node.type)}
-                className="text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5"
+                className="text-left px-2.5 py-2 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
                 title={node.description}
               >
-                <span className="w-4 text-center text-[10px] opacity-60">{getIcon(node.type)}</span>
+                <span className="w-5 text-center text-xs opacity-60">{getIcon(node.type)}</span>
                 <span className="truncate">{node.label}</span>
               </button>
             ))}
@@ -124,16 +124,16 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
 
         {/* Algorithmic */}
         <div className="mb-2">
-          <h4 className="text-[10px] font-medium text-pink-400 mb-1.5 uppercase tracking-wider px-1">Algorithmic</h4>
+          <h4 className="text-xs font-medium text-pink-400 mb-2 uppercase tracking-wider px-1">Algorithmic</h4>
           <div className="grid grid-cols-2 gap-1">
             {nodeCategories.algorithmic.map((node) => (
               <button
                 key={node.type}
                 onClick={() => onAddNode(node.type)}
-                className="text-left px-2 py-1.5 rounded text-xs text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-1.5"
+                className="text-left px-2.5 py-2 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
                 title={node.description}
               >
-                <span className="w-4 text-center text-[10px] opacity-60">{getIcon(node.type)}</span>
+                <span className="w-5 text-center text-xs opacity-60">{getIcon(node.type)}</span>
                 <span className="truncate">{node.label}</span>
               </button>
             ))}
@@ -142,8 +142,8 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
       </div>
 
       {/* Footer tip */}
-      <div className="px-3 py-2 border-t border-slate-700 bg-slate-800/50">
-        <p className="text-[10px] text-slate-500">
+      <div className="px-4 py-2.5 border-t border-slate-700 bg-slate-800/50">
+        <p className="text-xs text-slate-500">
           Connect nodes to create patterns
         </p>
       </div>
