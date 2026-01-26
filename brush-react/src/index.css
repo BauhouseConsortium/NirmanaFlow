@@ -25,3 +25,18 @@ body {
 .split-view-separator:active {
   background-color: #475569 !important;
 }
+
+/* React Flow node styling - remove default backgrounds */
+.react-flow__node {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.react-flow__node-output,
+.react-flow__node-shape,
+.react-flow__node-iteration,
+.react-flow__node-text {
+  background: transparent !important;
+}

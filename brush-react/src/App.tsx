@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Allotment } from 'allotment';
 import 'allotment/dist/style.css';
 
-import { CodeEditor } from './components/CodeEditor';
+import { FlowEditor, type ExecutionResult as FlowExecutionResult } from './components/flow';
 import { VectorPreview } from './components/VectorPreview';
 import { VectorSettingsPanel } from './components/VectorSettingsPanel';
 import { Toolbar } from './components/Toolbar';
@@ -12,21 +12,18 @@ import { StreamingProgress } from './components/StreamingProgress';
 import { useVectorSettings } from './hooks/useVectorSettings';
 import { useConsole } from './hooks/useConsole';
 import { useFluidNC } from './hooks/useFluidNC';
-import { executeDrawingCode, type Path } from './utils/drawingApi';
+import type { Path } from './utils/drawingApi';
 import { generateVectorGCode, type GeneratedVectorGCode } from './utils/vectorGcodeGenerator';
-import { defaultCode, type Example } from './data/examples';
 import { uploadGCode } from './utils/hardware';
 
 export default function App() {
-  const [code, setCode] = useState(defaultCode);
   const [paths, setPaths] = useState<Path[]>([]);
   const [gcodeResult, setGcodeResult] = useState<GeneratedVectorGCode | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const { settings, updateSetting, resetSettings } = useVectorSettings();
   const { logs, log, clear } = useConsole();
-  const runTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastExecutionRef = useRef<FlowExecutionResult | null>(null);
 
   // FluidNC WebSocket connection
   const fluidNC = useFluidNC(settings.controllerHost, {
@@ -61,62 +58,65 @@ export default function App() {
     }
   }, [fluidNC.streaming.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-run on code change (debounced)
+  // Handle flow editor changes
+  const handleFlowChange = useCallback(
+    (newPaths: Path[], result: FlowExecutionResult) => {
+      lastExecutionRef.current = result;
+      setPaths(newPaths);
+
+      if (!result.success) {
+        log(`Error: ${result.error}`, 'error');
+        setGcodeResult(null);
+        return;
+      }
+
+      // Generate G-code if we have paths
+      if (newPaths.length > 0) {
+        const gcode = generateVectorGCode(newPaths, settings);
+        setGcodeResult(gcode);
+      } else {
+        setGcodeResult(null);
+      }
+    },
+    [settings, log]
+  );
+
+  // Log execution stats periodically (debounced)
+  const logTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if (runTimeoutRef.current) {
-      clearTimeout(runTimeoutRef.current);
+    if (logTimeoutRef.current) {
+      clearTimeout(logTimeoutRef.current);
     }
 
-    runTimeoutRef.current = setTimeout(() => {
-      handleRun();
-    }, 500);
+    logTimeoutRef.current = setTimeout(() => {
+      if (paths.length > 0 && gcodeResult) {
+        log(
+          `${paths.length} paths, ${gcodeResult.lines.length} G-code lines`,
+          'info'
+        );
+      }
+    }, 1000);
 
     return () => {
-      if (runTimeoutRef.current) {
-        clearTimeout(runTimeoutRef.current);
+      if (logTimeoutRef.current) {
+        clearTimeout(logTimeoutRef.current);
       }
     };
-  }, [code]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [paths.length, gcodeResult?.lines.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleRun = useCallback(() => {
-    setIsLoading(true);
-    setError(null);
-
-    // Execute drawing code
-    const result = executeDrawingCode(code, settings.canvasWidth, settings.canvasHeight);
-
-    if (!result.success) {
-      setError(result.error || 'Unknown error');
-      setPaths([]);
-      setGcodeResult(null);
-      log(`Error: ${result.error}`, 'error');
-      setIsLoading(false);
-      return;
-    }
-
-    setPaths(result.paths);
-    log(`Executed in ${result.executionTime.toFixed(1)}ms, ${result.paths.length} paths`, 'success');
-
-    // Generate G-code
-    if (result.paths.length > 0) {
-      const gcode = generateVectorGCode(result.paths, settings);
+    // Re-generate G-code with current settings
+    if (paths.length > 0) {
+      setIsLoading(true);
+      const gcode = generateVectorGCode(paths, settings);
       setGcodeResult(gcode);
       log(
         `G-code: ${gcode.lines.length} lines, ${gcode.stats.totalDistance.toFixed(0)}mm draw, ${gcode.stats.travelDistance.toFixed(0)}mm travel`,
-        'info'
+        'success'
       );
-    } else {
-      setGcodeResult(null);
+      setIsLoading(false);
     }
-
-    setIsLoading(false);
-  }, [code, settings, log]);
-
-  const handleSelectExample = useCallback((example: Example) => {
-    setCode(example.code);
-    clear();
-    log(`Loaded example: ${example.name}`, 'info');
-  }, [log, clear]);
+  }, [paths, settings, log]);
 
   const handleExportSVG = useCallback(() => {
     if (!gcodeResult?.svg) return;
@@ -184,8 +184,8 @@ export default function App() {
       <header className="flex-shrink-0 border-b border-slate-700 bg-slate-900/95 backdrop-blur-sm z-10">
         <div className="px-4 py-2 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
-            <h1 className="text-lg font-semibold text-slate-100">Algorithmic Plotter</h1>
-            <span className="text-xs text-slate-500 hidden sm:inline">Code-driven vector drawing</span>
+            <h1 className="text-lg font-semibold text-slate-100">Nirmana Flow</h1>
+            <span className="text-xs text-slate-500 hidden sm:inline">Visual algorithmic drawing</span>
           </div>
           <div className="flex items-center gap-3">
             <Toolbar
@@ -194,7 +194,6 @@ export default function App() {
               onExportGCode={handleExportGCode}
               onUpload={handleUpload}
               onStream={handleStream}
-              onSelectExample={handleSelectExample}
               hasOutput={!!gcodeResult}
               isLoading={isLoading}
               isConnected={fluidNC.isConnected}
@@ -216,12 +215,10 @@ export default function App() {
       {/* Main Content - Split Panes */}
       <main className="flex-1 min-h-0">
         <Allotment>
-          {/* Left: Code Editor */}
-          <Allotment.Pane minSize={300} preferredSize="50%">
-            <div className="h-full p-3 flex flex-col gap-3">
-              <div className="flex-1 min-h-0">
-                <CodeEditor value={code} onChange={setCode} error={error} />
-              </div>
+          {/* Left: Visual Flow Editor */}
+          <Allotment.Pane minSize={400} preferredSize="50%">
+            <div className="h-full">
+              <FlowEditor onChange={handleFlowChange} />
             </div>
           </Allotment.Pane>
 
