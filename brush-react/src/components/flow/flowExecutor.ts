@@ -1,10 +1,187 @@
 /**
  * Flow Executor - Converts node graph to drawing paths
  * Uses Zod schemas for safe data extraction
+ * Implements persistent caching for performance optimization
  */
 
 import type { Node, Edge } from '@xyflow/react';
 import type { Path, Point } from '../../utils/drawingApi';
+
+// ============ Persistent Cache System ============
+
+interface CacheEntry {
+  paths: Path[];
+  dataHash: string;
+  upstreamHash: string; // Combined hash of all upstream node hashes
+}
+
+/**
+ * Persistent cache for node execution results.
+ * Survives across multiple executeFlow calls.
+ */
+export class FlowExecutionCache {
+  private cache = new Map<string, CacheEntry>();
+  private nodeHashes = new Map<string, string>(); // nodeId -> combined hash
+  private hitCount = 0;
+  private missCount = 0;
+
+  /**
+   * Fast string hash using djb2 algorithm
+   */
+  private hashString(str: string): string {
+    let hash = 5381;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) + hash) ^ str.charCodeAt(i);
+    }
+    return (hash >>> 0).toString(36);
+  }
+
+  /**
+   * Extract only data-relevant fields from node (exclude position, selection, etc.)
+   */
+  private getRelevantNodeData(node: Node): Record<string, unknown> {
+    const data = node.data as Record<string, unknown>;
+    // Filter out UI-only fields
+    const { selected, dragging, ...relevantData } = data;
+    return {
+      type: node.type,
+      ...relevantData,
+    };
+  }
+
+  /**
+   * Generate a hash for a node's data (excluding position/UI state)
+   */
+  private hashNodeData(node: Node): string {
+    const relevantData = this.getRelevantNodeData(node);
+    return this.hashString(JSON.stringify(relevantData));
+  }
+
+  /**
+   * Compute the combined hash for a node (its data + all upstream hashes)
+   */
+  computeNodeHash(
+    nodeId: string,
+    nodes: Node[],
+    edges: Edge[],
+    computed: Map<string, string> = new Map()
+  ): string {
+    // Return if already computed in this pass
+    if (computed.has(nodeId)) {
+      return computed.get(nodeId)!;
+    }
+
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) {
+      computed.set(nodeId, '');
+      return '';
+    }
+
+    // Get upstream nodes
+    const incomingEdges = edges.filter((e) => e.target === nodeId);
+    const upstreamIds = incomingEdges.map((e) => e.source);
+
+    // Compute upstream hashes first (recursive)
+    const upstreamHashes: string[] = [];
+    for (const upId of upstreamIds) {
+      upstreamHashes.push(this.computeNodeHash(upId, nodes, edges, computed));
+    }
+
+    // For group nodes, include child hashes
+    if (node.type === 'group') {
+      const childNodes = nodes.filter((n) => n.parentId === nodeId);
+      for (const child of childNodes) {
+        upstreamHashes.push(this.computeNodeHash(child.id, nodes, edges, computed));
+      }
+    }
+
+    // Combine: node data hash + sorted upstream hashes
+    const dataHash = this.hashNodeData(node);
+    const upstreamHash = this.hashString(upstreamHashes.sort().join('|'));
+    const combinedHash = this.hashString(`${dataHash}:${upstreamHash}`);
+
+    computed.set(nodeId, combinedHash);
+    this.nodeHashes.set(nodeId, combinedHash);
+
+    return combinedHash;
+  }
+
+  /**
+   * Get cached paths for a node if valid
+   * Returns cached paths only if the current hash matches the stored hash
+   */
+  get(nodeId: string, currentHash: string): Path[] | null {
+    const entry = this.cache.get(nodeId);
+    if (entry && entry.dataHash === currentHash) {
+      this.hitCount++;
+      return entry.paths;
+    }
+    this.missCount++;
+    return null;
+  }
+
+  /**
+   * Store paths for a node
+   */
+  set(nodeId: string, paths: Path[], dataHash: string, upstreamHash: string): void {
+    this.cache.set(nodeId, { paths, dataHash, upstreamHash });
+  }
+
+  /**
+   * Clear cache for specific nodes (when they're deleted)
+   */
+  invalidateNodes(nodeIds: string[]): void {
+    for (const id of nodeIds) {
+      this.cache.delete(id);
+      this.nodeHashes.delete(id);
+    }
+  }
+
+  /**
+   * Clear entire cache
+   */
+  clear(): void {
+    this.cache.clear();
+    this.nodeHashes.clear();
+    this.hitCount = 0;
+    this.missCount = 0;
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getStats(): { hits: number; misses: number; hitRate: number; size: number } {
+    const total = this.hitCount + this.missCount;
+    return {
+      hits: this.hitCount,
+      misses: this.missCount,
+      hitRate: total > 0 ? this.hitCount / total : 0,
+      size: this.cache.size,
+    };
+  }
+
+  /**
+   * Reset statistics (keep cache)
+   */
+  resetStats(): void {
+    this.hitCount = 0;
+    this.missCount = 0;
+  }
+}
+
+// Global cache instance (can be replaced with dependency injection if needed)
+let globalCache: FlowExecutionCache | null = null;
+
+export function getGlobalCache(): FlowExecutionCache {
+  if (!globalCache) {
+    globalCache = new FlowExecutionCache();
+  }
+  return globalCache;
+}
+
+export function createCache(): FlowExecutionCache {
+  return new FlowExecutionCache();
+}
 import { renderText } from './strokeFont';
 import { transliterateToba } from '../../utils/transliteration';
 import { glyphs } from '../../data/glyphs';
@@ -1221,18 +1398,40 @@ function applyIteration(node: Node, inputPaths: Path[]): Path[] {
 }
 
 // Main execution function - traverses the graph from output node backwards
-export function executeFlowGraph(nodes: Node[], edges: Edge[]): Path[] {
+export function executeFlowGraph(
+  nodes: Node[],
+  edges: Edge[],
+  persistentCache?: FlowExecutionCache
+): Path[] {
   // Find output node
   const outputNode = nodes.find((n) => n.type === 'output');
   if (!outputNode) return [];
 
-  // Build execution cache to avoid re-executing nodes
-  const cache = new Map<string, Path[]>();
+  // Use persistent cache if provided, otherwise create session cache
+  const cache = persistentCache ?? new FlowExecutionCache();
+
+  // Pre-compute all node hashes for this execution pass
+  const nodeHashes = new Map<string, string>();
+  for (const node of nodes) {
+    cache.computeNodeHash(node.id, nodes, edges, nodeHashes);
+  }
+
+  // Session cache for this execution (prevents duplicate work within single run)
+  const sessionCache = new Map<string, Path[]>();
 
   // Recursive function to get paths from a node
   function getNodePaths(nodeId: string): Path[] {
-    if (cache.has(nodeId)) {
-      return cache.get(nodeId)!;
+    // Check session cache first (within-execution deduplication)
+    if (sessionCache.has(nodeId)) {
+      return sessionCache.get(nodeId)!;
+    }
+
+    // Check persistent cache (cross-execution)
+    const currentHash = nodeHashes.get(nodeId) ?? '';
+    const cachedPaths = cache.get(nodeId, currentHash);
+    if (cachedPaths) {
+      sessionCache.set(nodeId, cachedPaths);
+      return cachedPaths;
     }
 
     const node = nodes.find((n) => n.id === nodeId);
@@ -1353,7 +1552,10 @@ export function executeFlowGraph(nodes: Node[], edges: Edge[]): Path[] {
       }
     }
 
-    cache.set(nodeId, paths);
+    // Store in both session and persistent cache
+    sessionCache.set(nodeId, paths);
+    cache.set(nodeId, paths, currentHash, '');
+
     return paths;
   }
 
@@ -1365,18 +1567,36 @@ export interface ExecutionResult {
   paths: Path[];
   error?: string;
   executionTime: number;
+  cacheStats?: { hits: number; misses: number; hitRate: number; size: number };
 }
 
-export function executeFlow(nodes: Node[], edges: Edge[]): ExecutionResult {
+/**
+ * Execute flow with optional persistent cache
+ * @param nodes - Flow nodes
+ * @param edges - Flow edges
+ * @param cache - Optional persistent cache instance for cross-execution caching
+ */
+export function executeFlow(
+  nodes: Node[],
+  edges: Edge[],
+  cache?: FlowExecutionCache
+): ExecutionResult {
   const startTime = performance.now();
 
   try {
-    const paths = executeFlowGraph(nodes, edges);
-    return {
+    const paths = executeFlowGraph(nodes, edges, cache);
+    const result: ExecutionResult = {
       success: true,
       paths,
       executionTime: performance.now() - startTime,
     };
+
+    // Include cache stats if using persistent cache
+    if (cache) {
+      result.cacheStats = cache.getStats();
+    }
+
+    return result;
   } catch (err) {
     return {
       success: false,

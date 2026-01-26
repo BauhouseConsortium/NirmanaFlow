@@ -32,7 +32,7 @@ import { NodePalette } from './NodePalette';
 import { GlyphEditor } from './GlyphEditor';
 import { CodeEditorModal } from './CodeEditorModal';
 import { nodeDefaults } from './nodeTypes';
-import { executeFlow, type ExecutionResult } from './flowExecutor';
+import { executeFlow, FlowExecutionCache, type ExecutionResult } from './flowExecutor';
 import type { Path } from '../../utils/drawingApi';
 
 // Define custom node types
@@ -85,6 +85,9 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
   const groupIdCounter = useRef(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [flowName, setFlowName] = useState('untitled');
+
+  // Persistent execution cache - survives across renders
+  const executionCacheRef = useRef<FlowExecutionCache>(new FlowExecutionCache());
 
   // Handle edge connections
   const onConnect = useCallback(
@@ -278,10 +281,20 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
     return () => window.removeEventListener('groupCollapse', handleGroupCollapse);
   }, [setNodes]);
 
-  // Execute flow when nodes or edges change
+  // Execute flow when nodes or edges change (with persistent cache)
   useEffect(() => {
-    const result = executeFlow(nodes, edges);
+    const result = executeFlow(nodes, edges, executionCacheRef.current);
     onChange?.(result.paths, result);
+
+    // Log cache stats in development
+    if (import.meta.env.DEV && result.cacheStats) {
+      const { hits, misses, hitRate, size } = result.cacheStats;
+      if (hits + misses > 0) {
+        console.debug(
+          `[FlowCache] hits: ${hits}, misses: ${misses}, rate: ${(hitRate * 100).toFixed(1)}%, size: ${size}`
+        );
+      }
+    }
   }, [nodes, edges, onChange]);
 
   // Listen for glyph editor open event
@@ -351,6 +364,9 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
           return;
         }
 
+        // Clear the execution cache when loading a new flow
+        executionCacheRef.current.clear();
+
         // Load the flow
         setNodes(flowData.nodes);
         setEdges(flowData.edges);
@@ -382,6 +398,7 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
   // Clear flow (reset to initial state)
   const handleClearFlow = useCallback(() => {
     if (confirm('Clear all nodes? This cannot be undone.')) {
+      executionCacheRef.current.clear();
       setNodes(initialNodes);
       setEdges(initialEdges);
       nodeIdCounter.current = 1;

@@ -15,6 +15,13 @@ export { CodeEditorModal } from './CodeEditorModal';
 export { CustomEdge } from './CustomEdge';
 export { NodePalette } from './NodePalette';
 export { GlyphEditor } from './GlyphEditor';
-export { executeFlow, executeFlowGraph, type ExecutionResult } from './flowExecutor';
+export {
+  executeFlow,
+  executeFlowGraph,
+  FlowExecutionCache,
+  createCache,
+  getGlobalCache,
+  type ExecutionResult,
+} from './flowExecutor';
 export { renderText } from './strokeFont';
 export * from './nodeTypes';
