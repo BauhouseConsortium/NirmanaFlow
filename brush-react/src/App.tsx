@@ -255,6 +255,12 @@ export default function App() {
                     showSimulation={true}
                     machinePosition={fluidNC.status.position}
                     isConnected={fluidNC.isConnected}
+                    outputSettings={{
+                      targetWidth: settings.targetWidth,
+                      targetHeight: settings.targetHeight,
+                      offsetX: settings.offsetX,
+                      offsetY: settings.offsetY,
+                    }}
                   />
 
                   {/* Stats */}

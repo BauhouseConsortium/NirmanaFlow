@@ -7,6 +7,13 @@ interface MachinePosition {
   z: number;
 }
 
+interface OutputSettings {
+  targetWidth: number;
+  targetHeight: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 interface VectorPreviewProps {
   paths: Path[];
   width: number;
@@ -15,6 +22,7 @@ interface VectorPreviewProps {
   showSimulation?: boolean;
   machinePosition?: MachinePosition | null;
   isConnected?: boolean;
+  outputSettings?: OutputSettings;
 }
 
 // Stable empty array for default prop
@@ -36,11 +44,28 @@ interface GCodeMove {
 const RAPID_SPEED = 5000;
 const DEFAULT_FEED = 1600;
 
-function parseGCodeToMoves(lines: string[]): { moves: GCodeMove[]; totalTime: number } {
+interface GCodePath {
+  points: [number, number][];
+}
+
+interface ParsedGCode {
+  moves: GCodeMove[];
+  totalTime: number;
+  paths: GCodePath[];
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
+}
+
+function parseGCodeToMoves(lines: string[]): ParsedGCode {
   const moves: GCodeMove[] = [];
+  const paths: GCodePath[] = [];
+  let currentPath: [number, number][] = [];
+
   let x = 0, y = 0, z = 5;
   let feedRate = DEFAULT_FEED;
   let cumulativeTime = 0;
+  let penDown = false;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
   for (const line of lines) {
     const trimmed = line.trim();
@@ -96,9 +121,53 @@ function parseGCodeToMoves(lines: string[]): { moves: GCodeMove[]; totalTime: nu
     });
 
     cumulativeTime += duration;
+
+    // Track pen state and build paths from drawing moves
+    const wasPenDown = penDown;
+    penDown = z <= 0.1;
+
+    if (penDown) {
+      // Update bounds only for drawing positions
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+
+      if (!wasPenDown) {
+        // Pen just went down - start new path
+        if (currentPath.length > 1) {
+          paths.push({ points: currentPath });
+        }
+        currentPath = [[x, y]];
+      } else if (isG1) {
+        // Continue drawing
+        currentPath.push([x, y]);
+      }
+    } else if (wasPenDown) {
+      // Pen just lifted - end current path
+      if (currentPath.length > 1) {
+        paths.push({ points: currentPath });
+      }
+      currentPath = [];
+    }
   }
 
-  return { moves, totalTime: cumulativeTime };
+  // Don't forget last path
+  if (currentPath.length > 1) {
+    paths.push({ points: currentPath });
+  }
+
+  // Default bounds if nothing was drawn
+  if (minX === Infinity) {
+    minX = 0; minY = 0; maxX = 150; maxY = 120;
+  }
+
+  return {
+    moves,
+    totalTime: cumulativeTime,
+    paths,
+    bounds: { minX, minY, maxX, maxY }
+  };
 }
 
 function VectorPreviewComponent({
@@ -109,6 +178,7 @@ function VectorPreviewComponent({
   showSimulation = false,
   machinePosition = null,
   isConnected = false,
+  outputSettings,
 }: VectorPreviewProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -120,10 +190,17 @@ function VectorPreviewComponent({
   const [currentInfo, setCurrentInfo] = useState('');
 
   // Memoize parsed G-code moves to avoid re-parsing on every render
-  const parsedGCode = useMemo(() => {
-    if (gcodeLines.length === 0) return { moves: [], totalTime: 0 };
+  const parsedGCode = useMemo((): ParsedGCode => {
+    if (gcodeLines.length === 0) {
+      return {
+        moves: [],
+        totalTime: 0,
+        paths: [],
+        bounds: { minX: 0, minY: 0, maxX: width, maxY: height }
+      };
+    }
     return parseGCodeToMoves(gcodeLines);
-  }, [gcodeLines]);
+  }, [gcodeLines, width, height]);
 
   // Responsive sizing
   useEffect(() => {
@@ -174,24 +251,66 @@ function VectorPreviewComponent({
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, cw, ch);
 
-    // Grid
+    // Decide whether to render from G-code or canvas paths
+    const useGCode = parsedGCode.paths.length > 0;
+    const { bounds } = parsedGCode;
+
+    // Calculate viewport - add padding around content
+    const padding = 10;
+    let viewMinX: number, viewMinY: number, viewMaxX: number, viewMaxY: number;
+
+    if (useGCode) {
+      // Use G-code bounds with some margin
+      const margin = 5;
+      viewMinX = bounds.minX - margin;
+      viewMinY = bounds.minY - margin;
+      viewMaxX = bounds.maxX + margin;
+      viewMaxY = bounds.maxY + margin;
+    } else {
+      // Use canvas coordinate space
+      viewMinX = 0;
+      viewMinY = 0;
+      viewMaxX = width;
+      viewMaxY = height;
+    }
+
+    const viewWidth = viewMaxX - viewMinX;
+    const viewHeight = viewMaxY - viewMinY;
+
+    // Calculate scale to fit viewport in canvas (with padding)
+    const availableWidth = cw - padding * 2;
+    const availableHeight = ch - padding * 2;
+    const scaleX = availableWidth / viewWidth;
+    const scaleY = availableHeight / viewHeight;
+    const scale = Math.min(scaleX, scaleY);
+
+    // Helper to convert coordinates to screen space
+    const toScreen = (x: number, y: number): [number, number] => {
+      return [
+        padding + (x - viewMinX) * scale,
+        padding + (y - viewMinY) * scale
+      ];
+    };
+
+    // Grid (in view coordinates)
     ctx.strokeStyle = '#e2e8f0';
     ctx.lineWidth = 0.5;
     const gridSize = 20;
-    const scaleX = cw / (width || 150);
-    const scaleY = ch / (height || 120);
-    const scale = Math.min(scaleX, scaleY);
+    const gridStartX = Math.floor(viewMinX / gridSize) * gridSize;
+    const gridStartY = Math.floor(viewMinY / gridSize) * gridSize;
 
-    for (let x = 0; x <= width; x += gridSize) {
+    for (let gx = gridStartX; gx <= viewMaxX; gx += gridSize) {
+      const [sx] = toScreen(gx, 0);
       ctx.beginPath();
-      ctx.moveTo(x * scale, 0);
-      ctx.lineTo(x * scale, ch);
+      ctx.moveTo(sx, 0);
+      ctx.lineTo(sx, ch);
       ctx.stroke();
     }
-    for (let y = 0; y <= height; y += gridSize) {
+    for (let gy = gridStartY; gy <= viewMaxY; gy += gridSize) {
+      const [, sy] = toScreen(0, gy);
       ctx.beginPath();
-      ctx.moveTo(0, y * scale);
-      ctx.lineTo(cw, y * scale);
+      ctx.moveTo(0, sy);
+      ctx.lineTo(cw, sy);
       ctx.stroke();
     }
 
@@ -201,25 +320,42 @@ function VectorPreviewComponent({
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
 
-    for (const path of paths) {
-      if (path.length < 2) continue;
+    if (useGCode) {
+      // Render from G-code paths (already in G-code coordinates)
+      for (const gcodePath of parsedGCode.paths) {
+        if (gcodePath.points.length < 2) continue;
 
-      ctx.beginPath();
-      ctx.moveTo(path[0][0] * scale, path[0][1] * scale);
-      for (let i = 1; i < path.length; i++) {
-        ctx.lineTo(path[i][0] * scale, path[i][1] * scale);
+        ctx.beginPath();
+        const [sx, sy] = toScreen(gcodePath.points[0][0], gcodePath.points[0][1]);
+        ctx.moveTo(sx, sy);
+        for (let i = 1; i < gcodePath.points.length; i++) {
+          const [px, py] = toScreen(gcodePath.points[i][0], gcodePath.points[i][1]);
+          ctx.lineTo(px, py);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
+    } else {
+      // Render from canvas paths (original behavior)
+      for (const path of paths) {
+        if (path.length < 2) continue;
+
+        ctx.beginPath();
+        const [sx, sy] = toScreen(path[0][0], path[0][1]);
+        ctx.moveTo(sx, sy);
+        for (let i = 1; i < path.length; i++) {
+          const [px, py] = toScreen(path[i][0], path[i][1]);
+          ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
     }
 
-    // Draw simulation state
+    // Draw simulation state (always in G-code coordinates when useGCode)
     if (simState) {
-      // Machine area scaling (for G-code coordinates)
-      const machineScale = Math.min(cw / 150, ch / 140);
       const penDown = simState.z <= 0.1;
 
-      const sx = simState.x * machineScale;
-      const sy = (140 - simState.y) * machineScale; // Flip Y
+      // Simulation coordinates are always G-code coordinates
+      const [sx, sy] = toScreen(simState.x, simState.y);
 
       // Crosshair
       ctx.strokeStyle = '#00000040';
@@ -258,12 +394,10 @@ function VectorPreviewComponent({
 
     // Draw realtime machine position (when connected and not simulating)
     if (!simState && isConnected && machinePosition) {
-      // Machine area scaling (for G-code coordinates)
-      const machineScale = Math.min(cw / 150, ch / 140);
       const penDown = machinePosition.z <= 0.1;
 
-      const mx = machinePosition.x * machineScale;
-      const my = (140 - machinePosition.y) * machineScale; // Flip Y
+      // Machine position is in G-code coordinates
+      const [mx, my] = toScreen(machinePosition.x, machinePosition.y);
 
       // Crosshair
       ctx.strokeStyle = '#f59e0b40';
@@ -318,15 +452,16 @@ function VectorPreviewComponent({
     }
 
     // Stats overlay
-    if (paths.length > 0 && !simState) {
+    const pathCount = useGCode ? parsedGCode.paths.length : paths.length;
+    if (pathCount > 0 && !simState) {
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.fillRect(4, ch - 24, 120, 20);
       ctx.fillStyle = '#ffffff';
       ctx.font = '11px system-ui';
       ctx.textAlign = 'left';
-      ctx.fillText(`${paths.length} paths`, 8, ch - 10);
+      ctx.fillText(`${pathCount} paths`, 8, ch - 10);
     }
-  }, [paths, dimensions, width, height, isConnected, machinePosition]);
+  }, [paths, dimensions, width, height, isConnected, machinePosition, parsedGCode]);
 
   // Regular drawing
   useEffect(() => {
@@ -506,6 +641,19 @@ export const VectorPreview = memo(VectorPreviewComponent, (prev, next) => {
   // Compare gcodeLines by reference
   if (prev.gcodeLines !== next.gcodeLines) {
     if (prev.gcodeLines?.length !== next.gcodeLines?.length) return false;
+  }
+
+  // Compare outputSettings
+  if (prev.outputSettings !== next.outputSettings) {
+    if (!prev.outputSettings || !next.outputSettings) return false;
+    if (
+      prev.outputSettings.targetWidth !== next.outputSettings.targetWidth ||
+      prev.outputSettings.targetHeight !== next.outputSettings.targetHeight ||
+      prev.outputSettings.offsetX !== next.outputSettings.offsetX ||
+      prev.outputSettings.offsetY !== next.outputSettings.offsetY
+    ) {
+      return false;
+    }
   }
 
   // Machine position - allow some tolerance for jitter
