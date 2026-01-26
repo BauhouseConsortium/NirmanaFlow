@@ -29,6 +29,7 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
                 {node.type === 'arc' && ')'}
                 {node.type === 'polygon' && '<>'}
                 {node.type === 'text' && 'Aa'}
+                {node.type === 'batak' && 'ᯀ'}
               </span>
               {node.label}
             </button>
@@ -91,7 +92,11 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
               className="w-full text-left px-2 py-1.5 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
               title={node.description}
             >
-              <span className="w-4 text-center text-xs opacity-60">λ</span>
+              <span className="w-4 text-center text-xs opacity-60">
+                {node.type === 'algorithmic' && 'λ'}
+                {node.type === 'attractor' && '∞'}
+                {node.type === 'lsystem' && '🌿'}
+              </span>
               {node.label}
             </button>
           ))}

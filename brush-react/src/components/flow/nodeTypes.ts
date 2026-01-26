@@ -61,6 +61,14 @@ export interface TextNodeData extends NodeData {
   spacing: number;
 }
 
+export interface BatakTextNodeData extends NodeData {
+  text: string;
+  x: number;
+  y: number;
+  size: number;
+  showPreview: boolean;
+}
+
 // Control flow node data types
 export interface RepeatNodeData extends NodeData {
   count: number;
@@ -118,6 +126,30 @@ export interface AlgorithmicNodeData extends NodeData {
   baseY: number;
 }
 
+export interface AttractorNodeData extends NodeData {
+  type: 'clifford' | 'dejong' | 'bedhead' | 'tinkerbell' | 'gumowski';
+  iterations: number;
+  a: number;
+  b: number;
+  c: number;
+  d: number;
+  scale: number;
+  centerX: number;
+  centerY: number;
+}
+
+export interface LSystemNodeData extends NodeData {
+  axiom: string;
+  rules: string;
+  iterations: number;
+  angle: number;
+  stepSize: number;
+  startX: number;
+  startY: number;
+  startAngle: number;
+  scalePerIter: number;
+}
+
 // Output node
 export interface OutputNodeData extends NodeData {
   // No additional data needed
@@ -138,6 +170,8 @@ export type FlowNodeData =
   | RotateNodeData
   | ScaleNodeData
   | AlgorithmicNodeData
+  | AttractorNodeData
+  | LSystemNodeData
   | OutputNodeData;
 
 // Node categories for the palette
@@ -150,6 +184,7 @@ export const nodeCategories = {
     { type: 'arc', label: 'Arc', description: 'Draw an arc segment' },
     { type: 'polygon', label: 'Polygon', description: 'Draw a regular polygon' },
     { type: 'text', label: 'Text', description: 'Draw text as vector strokes' },
+    { type: 'batak', label: 'Batak Text', description: 'Draw Batak script from Latin transliteration' },
   ],
   iteration: [
     { type: 'repeat', label: 'Repeat', description: 'Repeat with offset transform' },
@@ -163,6 +198,8 @@ export const nodeCategories = {
   ],
   algorithmic: [
     { type: 'algorithmic', label: 'Bytebeat', description: '8-bit viznut-style formula sequencer' },
+    { type: 'attractor', label: 'Attractor', description: 'Strange attractors (Clifford, De Jong, etc.)' },
+    { type: 'lsystem', label: 'L-System', description: 'Lindenmayer system fractal patterns' },
   ],
 } as const;
 
@@ -175,6 +212,7 @@ export const nodeDefaults: Record<string, Partial<FlowNodeData>> = {
   arc: { label: 'Arc', cx: 50, cy: 50, radius: 20, startAngle: 0, endAngle: 90, segments: 24 },
   polygon: { label: 'Polygon', sides: 6, cx: 50, cy: 50, radius: 20 },
   text: { label: 'Text', text: 'HELLO', x: 10, y: 10, size: 10, spacing: 1.2 },
+  batak: { label: 'Batak Text', text: 'horas', x: 10, y: 50, size: 30, showPreview: true },
   repeat: { label: 'Repeat', count: 5, offsetX: 10, offsetY: 0, rotation: 0, scale: 1 },
   grid: { label: 'Grid', cols: 3, rows: 3, spacingX: 30, spacingY: 30, startX: 15, startY: 15 },
   radial: { label: 'Radial', count: 8, cx: 75, cy: 60, radius: 40, startAngle: 0 },
@@ -192,6 +230,30 @@ export const nodeDefaults: Record<string, Partial<FlowNodeData>> = {
     sclScale: 0.01,
     baseX: 75,
     baseY: 60,
+  },
+  attractor: {
+    label: 'Attractor',
+    type: 'clifford',
+    iterations: 5000,
+    a: -1.4,
+    b: 1.6,
+    c: 1.0,
+    d: 0.7,
+    scale: 20,
+    centerX: 75,
+    centerY: 60,
+  },
+  lsystem: {
+    label: 'L-System',
+    axiom: 'F',
+    rules: 'F=F+F-F-F+F',
+    iterations: 3,
+    angle: 90,
+    stepSize: 10,
+    startX: 20,
+    startY: 100,
+    startAngle: -90,
+    scalePerIter: 0.7,
   },
   output: { label: 'Output' },
 };

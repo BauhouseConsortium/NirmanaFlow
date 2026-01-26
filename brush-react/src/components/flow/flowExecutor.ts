@@ -5,6 +5,8 @@
 import type { Node, Edge } from '@xyflow/react';
 import type { Path, Point } from '../../utils/drawingApi';
 import { renderText } from './strokeFont';
+import { transliterateToba } from '../../utils/transliteration';
+import { glyphs } from '../../data/glyphs';
 
 // Get all source nodes that connect to a target node
 function getSourceNodes(targetId: string, nodes: Node[], edges: Edge[]): Node[] {
@@ -174,6 +176,334 @@ function getPathsCentroid(paths: Path[]): Point {
   }
 
   return count > 0 ? [sumX / count, sumY / count] : [0, 0];
+}
+
+// Render Batak text using glyphs data
+// Simplify path by removing consecutive points that are too close together
+function simplifyPath(path: Point[], minDistance: number = 0.5): Point[] {
+  if (path.length < 2) return path;
+
+  const result: Point[] = [path[0]];
+
+  for (let i = 1; i < path.length; i++) {
+    const prev = result[result.length - 1];
+    const curr = path[i];
+    const dx = curr[0] - prev[0];
+    const dy = curr[1] - prev[1];
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Keep point if it's far enough from the previous kept point
+    // or if it's the last point in the path
+    if (dist >= minDistance || i === path.length - 1) {
+      result.push(curr);
+    }
+  }
+
+  return result;
+}
+
+function renderBatakText(
+  latinText: string,
+  options: { x: number; y: number; size: number }
+): Path[] {
+  const { x: startX, y: startY, size } = options;
+  const paths: Path[] = [];
+
+  // Transliterate Latin to Batak script
+  const batakText = transliterateToba(latinText);
+  if (!batakText) return paths;
+
+  let cursorX = startX;
+  let lastBaseX = startX; // Track position of last base character for marks
+  const scale = size; // Size is the scaling factor
+
+  // Minimum distance for path simplification (scaled)
+  const minDist = 0.01 * scale;
+
+  for (const char of batakText) {
+    const glyph = glyphs[char];
+
+    if (glyph) {
+      // Determine render position
+      let renderX = cursorX;
+
+      if (glyph.is_mark && glyph.anchor) {
+        // Marks are positioned relative to the previous base character
+        // Use the anchor dx value to offset from the base position
+        renderX = lastBaseX;
+        if (glyph.anchor.mode === 'center') {
+          // For center mode, subtract the glyph's built-in X offset
+          // The mark paths already have X coordinates baked in
+          renderX = lastBaseX - (glyph.anchor.dx || 0) * scale;
+        } else if (glyph.anchor.mode === 'right') {
+          renderX = lastBaseX;
+        }
+      }
+
+      // Render glyph paths
+      for (const glyphPath of glyph.paths) {
+        const scaledPath: Point[] = glyphPath.map(([px, py]) => [
+          renderX + px * scale,
+          startY + py * scale,
+        ]);
+
+        // Simplify path to remove clustered points that cause artifacts
+        const simplifiedPath = simplifyPath(scaledPath, minDist);
+
+        if (simplifiedPath.length > 1) {
+          paths.push(simplifiedPath);
+        }
+      }
+
+      // Handle cursor advancement
+      if (!glyph.is_mark) {
+        // Save base character position for subsequent marks
+        lastBaseX = cursorX;
+        // Advance cursor by glyph width
+        cursorX += glyph.advance * scale;
+      }
+    } else if (char === ' ') {
+      // Space character - advance by a fixed amount
+      cursorX += 0.5 * scale;
+    }
+  }
+
+  return paths;
+}
+
+// Parse L-System rules from string format "F=FF,X=FX"
+function parseLSystemRules(rulesStr: string): Map<string, string> {
+  const rules = new Map<string, string>();
+  const parts = rulesStr.split(',');
+  for (const part of parts) {
+    const [key, value] = part.split('=');
+    if (key && value !== undefined) {
+      rules.set(key.trim(), value.trim());
+    }
+  }
+  return rules;
+}
+
+// Expand L-System string
+function expandLSystem(axiom: string, rules: Map<string, string>, iterations: number): string {
+  let current = axiom;
+  for (let i = 0; i < iterations; i++) {
+    let next = '';
+    for (const char of current) {
+      next += rules.get(char) ?? char;
+    }
+    current = next;
+    // Limit length to prevent explosion
+    if (current.length > 50000) break;
+  }
+  return current;
+}
+
+// Apply L-System transformation to input paths
+function applyLSystem(node: Node, inputPaths: Path[]): Path[] {
+  const data = node.data as Record<string, unknown>;
+  const axiom = (data.axiom as string) || 'F';
+  const rulesStr = (data.rules as string) || 'F=F+F-F-F+F';
+  const iterations = Math.max(1, Math.min(8, (data.iterations as number) || 3));
+  const angle = (data.angle as number) ?? 90;
+  const stepSize = (data.stepSize as number) ?? 10;
+  const startX = (data.startX as number) ?? 75;
+  const startY = (data.startY as number) ?? 100;
+  const startAngle = (data.startAngle as number) ?? -90;
+  const scalePerIter = (data.scalePerIter as number) ?? 1;
+
+  if (inputPaths.length === 0) return [];
+
+  const rules = parseLSystemRules(rulesStr);
+  const expanded = expandLSystem(axiom, rules, iterations);
+
+  const resultPaths: Path[] = [];
+  const centroid = getPathsCentroid(inputPaths);
+
+  // Turtle state
+  let x = startX;
+  let y = startY;
+  let dir = startAngle;
+  let currentScale = 1;
+  const stack: { x: number; y: number; dir: number; scale: number }[] = [];
+
+  // Characters that trigger shape placement
+  const drawChars = new Set(['F', 'G', 'A', 'B', '0', '1', '6', '7', '8', '9']);
+
+  for (const char of expanded) {
+    switch (char) {
+      case 'F':
+      case 'G':
+      case 'A':
+      case 'B':
+      case '0':
+      case '1':
+      case '6':
+      case '7':
+      case '8':
+      case '9':
+        if (drawChars.has(char)) {
+          // Place input paths at current position with current rotation
+          const tx = x - centroid[0];
+          const ty = y - centroid[1];
+          const transformed = transformPaths(inputPaths, tx, ty, dir + 90, currentScale, 0, 0);
+          resultPaths.push(...transformed);
+        }
+        // Move forward
+        const rad = (dir * Math.PI) / 180;
+        x += Math.cos(rad) * stepSize * currentScale;
+        y += Math.sin(rad) * stepSize * currentScale;
+        break;
+
+      case 'f':
+        // Move forward without drawing
+        const radF = (dir * Math.PI) / 180;
+        x += Math.cos(radF) * stepSize * currentScale;
+        y += Math.sin(radF) * stepSize * currentScale;
+        break;
+
+      case '+':
+        // Turn right
+        dir += angle;
+        break;
+
+      case '-':
+        // Turn left
+        dir -= angle;
+        break;
+
+      case '[':
+        // Push state
+        stack.push({ x, y, dir, scale: currentScale });
+        currentScale *= scalePerIter;
+        break;
+
+      case ']':
+        // Pop state
+        const state = stack.pop();
+        if (state) {
+          x = state.x;
+          y = state.y;
+          dir = state.dir;
+          currentScale = state.scale;
+        }
+        break;
+
+      case '|':
+        // Turn around (180 degrees)
+        dir += 180;
+        break;
+    }
+
+    // Safety limit
+    if (resultPaths.length > 5000) break;
+  }
+
+  return resultPaths;
+}
+
+// Generate attractor paths
+function generateAttractor(node: Node): Path[] {
+  const data = node.data as Record<string, unknown>;
+  const type = (data.type as string) || 'clifford';
+  const iterations = Math.max(100, Math.min(50000, (data.iterations as number) || 5000));
+  const a = (data.a as number) ?? -1.4;
+  const b = (data.b as number) ?? 1.6;
+  const c = (data.c as number) ?? 1.0;
+  const d = (data.d as number) ?? 0.7;
+  const scale = (data.scale as number) ?? 20;
+  const centerX = (data.centerX as number) ?? 75;
+  const centerY = (data.centerY as number) ?? 60;
+
+  const points: Point[] = [];
+  let x = 0.1;
+  let y = 0.1;
+
+  // Skip first few iterations to settle into attractor
+  for (let i = 0; i < 100; i++) {
+    const result = iterateAttractor(type, x, y, a, b, c, d);
+    x = result.x;
+    y = result.y;
+  }
+
+  // Generate points
+  for (let i = 0; i < iterations; i++) {
+    const result = iterateAttractor(type, x, y, a, b, c, d);
+    x = result.x;
+    y = result.y;
+
+    // Check for divergence
+    if (!isFinite(x) || !isFinite(y) || Math.abs(x) > 1e6 || Math.abs(y) > 1e6) {
+      break;
+    }
+
+    points.push([centerX + x * scale, centerY + y * scale]);
+  }
+
+  // Split into multiple paths to avoid single massive stroke
+  // This creates a more plottable result
+  const paths: Path[] = [];
+  const chunkSize = 500;
+  for (let i = 0; i < points.length; i += chunkSize) {
+    const chunk = points.slice(i, Math.min(i + chunkSize + 1, points.length));
+    if (chunk.length > 1) {
+      paths.push(chunk);
+    }
+  }
+
+  return paths;
+}
+
+function iterateAttractor(
+  type: string,
+  x: number,
+  y: number,
+  a: number,
+  b: number,
+  c: number,
+  d: number
+): { x: number; y: number } {
+  switch (type) {
+    case 'clifford':
+      // Clifford Attractor: x' = sin(a*y) + c*cos(a*x), y' = sin(b*x) + d*cos(b*y)
+      return {
+        x: Math.sin(a * y) + c * Math.cos(a * x),
+        y: Math.sin(b * x) + d * Math.cos(b * y),
+      };
+
+    case 'dejong':
+      // De Jong Attractor: x' = sin(a*y) - cos(b*x), y' = sin(c*x) - cos(d*y)
+      return {
+        x: Math.sin(a * y) - Math.cos(b * x),
+        y: Math.sin(c * x) - Math.cos(d * y),
+      };
+
+    case 'bedhead':
+      // Bedhead Attractor: x' = sin(x*y/b)*y + cos(a*x-y), y' = x + sin(y)/b
+      return {
+        x: Math.sin(x * y / b) * y + Math.cos(a * x - y),
+        y: x + Math.sin(y) / b,
+      };
+
+    case 'tinkerbell':
+      // Tinkerbell Attractor: x' = x² - y² + a*x + b*y, y' = 2*x*y + c*x + d*y
+      return {
+        x: x * x - y * y + a * x + b * y,
+        y: 2 * x * y + c * x + d * y,
+      };
+
+    case 'gumowski':
+      // Gumowski-Mira Attractor
+      const gFunc = (v: number) => a * v + 2 * (1 - a) * v * v / (1 + v * v);
+      const newX = b * y + gFunc(x);
+      return {
+        x: newX,
+        y: -x + gFunc(newX),
+      };
+
+    default:
+      return { x, y };
+  }
 }
 
 // Safely evaluate a bytebeat formula
@@ -387,6 +717,9 @@ export function executeFlowGraph(nodes: Node[], edges: Edge[]): Path[] {
     if (node.type === 'shape') {
       // Shape nodes generate their own paths
       paths = generateShapePaths(node);
+    } else if (node.type === 'attractor') {
+      // Attractor nodes generate strange attractor paths
+      paths = generateAttractor(node);
     } else if (node.type === 'text') {
       // Text nodes render text as stroke paths
       const data = node.data as Record<string, unknown>;
@@ -396,6 +729,14 @@ export function executeFlowGraph(nodes: Node[], edges: Edge[]): Path[] {
       const size = (data.size as number) || 10;
       const spacing = (data.spacing as number) || 1.2;
       paths = renderText(text, { x, y, size, spacing });
+    } else if (node.type === 'batak') {
+      // Batak text nodes render Batak script from Latin transliteration
+      const data = node.data as Record<string, unknown>;
+      const text = (data.text as string) || '';
+      const x = (data.x as number) || 10;
+      const y = (data.y as number) || 50;
+      const size = (data.size as number) || 30;
+      paths = renderBatakText(text, { x, y, size });
     } else if (node.type === 'iteration') {
       // Iteration nodes transform input paths
       const inputPaths: Path[] = [];
@@ -417,6 +758,13 @@ export function executeFlowGraph(nodes: Node[], edges: Edge[]): Path[] {
         inputPaths.push(...getNodePaths(source.id));
       }
       paths = applyAlgorithmic(node, inputPaths);
+    } else if (node.type === 'lsystem') {
+      // L-System nodes apply fractal pattern transformations
+      const inputPaths: Path[] = [];
+      for (const source of sourceNodes) {
+        inputPaths.push(...getNodePaths(source.id));
+      }
+      paths = applyLSystem(node, inputPaths);
     } else if (node.type === 'group') {
       // Group node - collect paths from child nodes that are terminal (output not connected to siblings)
       const childNodes = nodes.filter((n) => n.parentId === nodeId);

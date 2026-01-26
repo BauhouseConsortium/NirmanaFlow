@@ -19,9 +19,12 @@ import { ShapeNode } from './ShapeNode';
 import { IterationNode } from './IterationNode';
 import { OutputNode } from './OutputNode';
 import { TextNode } from './TextNode';
+import { BatakTextNode } from './BatakTextNode';
 import { GroupNode } from './GroupNode';
 import { TransformNode } from './TransformNode';
 import { AlgorithmicNode } from './AlgorithmicNode';
+import { AttractorNode } from './AttractorNode';
+import { LSystemNode } from './LSystemNode';
 import { CustomEdge } from './CustomEdge';
 import { NodePalette } from './NodePalette';
 import { nodeDefaults } from './nodeTypes';
@@ -34,9 +37,12 @@ const nodeTypes = {
   iteration: IterationNode,
   output: OutputNode,
   text: TextNode,
+  batak: BatakTextNode,
   group: GroupNode,
   transform: TransformNode,
   algorithmic: AlgorithmicNode,
+  attractor: AttractorNode,
+  lsystem: LSystemNode,
 };
 
 // Define custom edge types
@@ -177,10 +183,16 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeType = 'transform';
       } else if (type === 'algorithmic') {
         nodeType = 'algorithmic';
+      } else if (type === 'attractor') {
+        nodeType = 'attractor';
+      } else if (type === 'lsystem') {
+        nodeType = 'lsystem';
       } else if (type === 'output') {
         nodeType = 'output';
       } else if (type === 'text') {
         nodeType = 'text';
+      } else if (type === 'batak') {
+        nodeType = 'batak';
       }
 
       const newNode: Node = {
