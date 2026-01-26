@@ -106,6 +106,18 @@ export interface ScaleNodeData extends NodeData {
   cy: number;
 }
 
+export interface AlgorithmicNodeData extends NodeData {
+  formula: string;
+  count: number;
+  mode: 'position' | 'rotation' | 'scale' | 'all';
+  xScale: number;
+  yScale: number;
+  rotScale: number;
+  sclScale: number;
+  baseX: number;
+  baseY: number;
+}
+
 // Output node
 export interface OutputNodeData extends NodeData {
   // No additional data needed
@@ -125,6 +137,7 @@ export type FlowNodeData =
   | TranslateNodeData
   | RotateNodeData
   | ScaleNodeData
+  | AlgorithmicNodeData
   | OutputNodeData;
 
 // Node categories for the palette
@@ -148,6 +161,9 @@ export const nodeCategories = {
     { type: 'rotate', label: 'Rotate', description: 'Rotate shapes' },
     { type: 'scale', label: 'Scale', description: 'Scale shapes' },
   ],
+  algorithmic: [
+    { type: 'algorithmic', label: 'Bytebeat', description: '8-bit viznut-style formula sequencer' },
+  ],
 } as const;
 
 // Default values for each node type
@@ -165,5 +181,17 @@ export const nodeDefaults: Record<string, Partial<FlowNodeData>> = {
   translate: { label: 'Translate', dx: 10, dy: 10 },
   rotate: { label: 'Rotate', angle: 45, cx: 50, cy: 50 },
   scale: { label: 'Scale', sx: 1.5, sy: 1.5, cx: 50, cy: 50 },
+  algorithmic: {
+    label: 'Bytebeat',
+    formula: 't*(t>>5|t>>8)',
+    count: 16,
+    mode: 'position',
+    xScale: 0.5,
+    yScale: 0.5,
+    rotScale: 1,
+    sclScale: 0.01,
+    baseX: 75,
+    baseY: 60,
+  },
   output: { label: 'Output' },
 };

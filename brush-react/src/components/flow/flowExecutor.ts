@@ -176,6 +176,76 @@ function getPathsCentroid(paths: Path[]): Point {
   return count > 0 ? [sumX / count, sumY / count] : [0, 0];
 }
 
+// Safely evaluate a bytebeat formula
+function evaluateFormula(formula: string, t: number): number {
+  try {
+    // Create a safe evaluation context with only t and bitwise operators
+    const safeFormula = formula
+      .replace(/[^0-9t+\-*/%&|^~()<>]/g, '') // Remove unsafe chars
+      .replace(/>>>/g, '>>'); // Normalize unsigned shift
+
+    // Use Function constructor for sandboxed evaluation
+    const fn = new Function('t', `return (${safeFormula}) & 0xFF;`);
+    const result = fn(t);
+    return typeof result === 'number' && isFinite(result) ? result : 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Apply algorithmic (bytebeat) node transformations
+function applyAlgorithmic(node: Node, inputPaths: Path[]): Path[] {
+  const data = node.data as Record<string, unknown>;
+  const formula = (data.formula as string) || 't*(t>>5|t>>8)';
+  const count = Math.max(1, Math.min(256, Math.floor((data.count as number) || 16)));
+  const mode = (data.mode as string) || 'position';
+  const xScale = (data.xScale as number) ?? 0.5;
+  const yScale = (data.yScale as number) ?? 0.5;
+  const rotScale = (data.rotScale as number) ?? 1;
+  const sclScale = (data.sclScale as number) ?? 0.01;
+  const baseX = (data.baseX as number) ?? 75;
+  const baseY = (data.baseY as number) ?? 60;
+
+  if (inputPaths.length === 0) return [];
+
+  const resultPaths: Path[] = [];
+  const centroid = getPathsCentroid(inputPaths);
+
+  for (let t = 0; t < count; t++) {
+    const val = evaluateFormula(formula, t);
+
+    let tx = 0, ty = 0, rot = 0, scl = 1;
+
+    switch (mode) {
+      case 'position':
+        tx = baseX + (val * xScale) - centroid[0];
+        ty = baseY + ((val >> 4) * yScale) - centroid[1];
+        break;
+      case 'rotation':
+        rot = val * rotScale;
+        tx = baseX - centroid[0];
+        ty = baseY - centroid[1];
+        break;
+      case 'scale':
+        scl = 0.5 + (val * sclScale);
+        tx = baseX - centroid[0];
+        ty = baseY - centroid[1];
+        break;
+      case 'all':
+        tx = baseX + ((val & 0x0F) * xScale) - centroid[0];
+        ty = baseY + (((val >> 4) & 0x0F) * yScale) - centroid[1];
+        rot = (val & 0x1F) * rotScale;
+        scl = 0.5 + ((val >> 5) * sclScale);
+        break;
+    }
+
+    const transformed = transformPaths(inputPaths, tx, ty, rot, scl, 0, 0);
+    resultPaths.push(...transformed);
+  }
+
+  return resultPaths;
+}
+
 // Apply transform node transformations (single transform)
 function applyTransform(node: Node, inputPaths: Path[]): Path[] {
   const data = node.data as Record<string, unknown>;
@@ -340,6 +410,13 @@ export function executeFlowGraph(nodes: Node[], edges: Edge[]): Path[] {
         inputPaths.push(...getNodePaths(source.id));
       }
       paths = applyTransform(node, inputPaths);
+    } else if (node.type === 'algorithmic') {
+      // Algorithmic nodes apply bytebeat formula-driven transformations
+      const inputPaths: Path[] = [];
+      for (const source of sourceNodes) {
+        inputPaths.push(...getNodePaths(source.id));
+      }
+      paths = applyAlgorithmic(node, inputPaths);
     } else if (node.type === 'group') {
       // Group node - collect paths from child nodes that are terminal (output not connected to siblings)
       const childNodes = nodes.filter((n) => n.parentId === nodeId);

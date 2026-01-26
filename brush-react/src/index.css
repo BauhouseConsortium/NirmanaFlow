@@ -39,7 +39,8 @@ body {
 .react-flow__node-iteration,
 .react-flow__node-text,
 .react-flow__node-group,
-.react-flow__node-transform {
+.react-flow__node-transform,
+.react-flow__node-algorithmic {
   background: transparent !important;
 }
 

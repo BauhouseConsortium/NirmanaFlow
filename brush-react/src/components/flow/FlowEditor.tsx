@@ -21,6 +21,7 @@ import { OutputNode } from './OutputNode';
 import { TextNode } from './TextNode';
 import { GroupNode } from './GroupNode';
 import { TransformNode } from './TransformNode';
+import { AlgorithmicNode } from './AlgorithmicNode';
 import { CustomEdge } from './CustomEdge';
 import { NodePalette } from './NodePalette';
 import { nodeDefaults } from './nodeTypes';
@@ -35,6 +36,7 @@ const nodeTypes = {
   text: TextNode,
   group: GroupNode,
   transform: TransformNode,
+  algorithmic: AlgorithmicNode,
 };
 
 // Define custom edge types
@@ -173,6 +175,8 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeType = 'iteration';
       } else if (['translate', 'rotate', 'scale'].includes(type)) {
         nodeType = 'transform';
+      } else if (type === 'algorithmic') {
+        nodeType = 'algorithmic';
       } else if (type === 'output') {
         nodeType = 'output';
       } else if (type === 'text') {

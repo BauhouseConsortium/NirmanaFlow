@@ -80,6 +80,24 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
         </div>
       </div>
 
+      {/* Algorithmic */}
+      <div className="mb-3">
+        <h4 className="text-xs font-medium text-pink-400 mb-2 uppercase tracking-wider">Algorithmic</h4>
+        <div className="space-y-1">
+          {nodeCategories.algorithmic.map((node) => (
+            <button
+              key={node.type}
+              onClick={() => onAddNode(node.type)}
+              className="w-full text-left px-2 py-1.5 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
+              title={node.description}
+            >
+              <span className="w-4 text-center text-xs opacity-60">λ</span>
+              {node.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Quick tips */}
       <div className="mt-4 pt-3 border-t border-slate-700">
         <p className="text-xs text-slate-500">
