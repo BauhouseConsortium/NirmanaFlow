@@ -522,11 +522,9 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
             Clear
           </button>
 
-          <div className="w-px h-6 bg-slate-600" />
-
           {/* Node count */}
-          <span className="text-xs text-slate-500 px-2">
-            {nodes.length} nodes · {edges.length} edges
+          <span className="text-xs text-slate-500 whitespace-nowrap tabular-nums">
+            {nodes.length}n · {edges.length}e
           </span>
         </div>
       </div>
