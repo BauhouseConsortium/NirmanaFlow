@@ -193,6 +193,66 @@ If mouse handlers don't replicate this exact conditional logic, cursor positions
 - **Change preview rendering**: `src/components/VectorPreview.tsx`
 - **Add new setting**: `src/hooks/useVectorSettings.ts` + `VectorSettingsPanel.tsx`
 
+## Canvas → Output Coordinate Mapping
+
+Canvas coordinates map **directly** to G-code machine coordinates based on canvas dimensions:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  CANVAS SETTINGS (canvasWidth × canvasHeight, e.g., 150 × 120)             │
+│  ─────────────────────────────────────────────────────────────             │
+│  • Defines the coordinate space for user drawing code                       │
+│  • Drawing API exposes this as `width` and `height` properties             │
+│  • Canvas origin (0,0) maps to output origin                               │
+│  • Canvas (canvasWidth, canvasHeight) maps to output corner                │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  OUTPUT SETTINGS (targetWidth × targetHeight, e.g., 120 × 100mm)           │
+│  offsetX, offsetY (e.g., 15, 20mm) - work area position on machine bed     │
+│  ─────────────────────────────────────────────────────────────────         │
+│  • scale = min(targetWidth/canvasWidth, targetHeight/canvasHeight)         │
+│  • Aspect ratio preserved, canvas CENTERED within target area              │
+│  • Transform: x = p[0] * scale + offsetX + centerOffsetX                   │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  G-CODE OUTPUT (machine coordinates in mm)                                 │
+│  ─────────────────────────────────────────                                 │
+│  • Work area: X from offsetX to offsetX+targetWidth                        │
+│  • Work area: Y from offsetY to offsetY+targetHeight                       │
+│  • clipToWorkArea setting: clips paths exceeding work area bounds          │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Predictable Coordinate Mapping
+
+The scale is calculated from **canvas dimensions**, not drawn content:
+
+| Canvas | Target Output | Scale | Canvas (75,60) → Output |
+|--------|---------------|-------|-------------------------|
+| 150×120 | 120×100mm | 0.8 | (60mm, 48mm) + offset |
+| 150×120 | 150×120mm | 1.0 | (75mm, 60mm) + offset |
+| 100×100 | 100×100mm | 1.0 | (75mm, 60mm) + offset |
+
+**Example (150×120 canvas → 120×100mm output):**
+```
+scaleX = 120mm / 150 = 0.8
+scaleY = 100mm / 120 = 0.833
+scale = min(0.8, 0.833) = 0.8  ← limited by width
+
+Canvas point (75, 60) → Output (75×0.8, 60×0.8) = (60mm, 48mm) + offsets
+```
+
+### Key Behavior
+
+- Canvas (0,0) always maps to output origin (with offset + centering)
+- A shape at canvas center stays at output center
+- Drawing outside canvas bounds (e.g., negative coords) extends beyond work area
+- Use `clipToWorkArea` to clip paths to the target output bounds
+
 ## G-Code Output Format
 
 ```gcode

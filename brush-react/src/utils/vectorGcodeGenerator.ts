@@ -274,30 +274,33 @@ export function generateVectorGCode(
     };
   }
 
-  // Calculate bounds (using points from ColoredPath)
+  // Calculate bounds of drawn content (for stats only)
   const allPoints = filteredPaths.flatMap((cp) => cp.points);
   const minX = Math.min(...allPoints.map((p) => p[0]));
   const maxX = Math.max(...allPoints.map((p) => p[0]));
   const minY = Math.min(...allPoints.map((p) => p[1]));
   const maxY = Math.max(...allPoints.map((p) => p[1]));
 
-  // Calculate scale to fit target dimensions while maintaining aspect ratio
-  const inputWidth = maxX - minX || 1;
-  const inputHeight = maxY - minY || 1;
-  const scaleX = targetWidth / inputWidth;
-  const scaleY = targetHeight / inputHeight;
+  // Calculate scale based on CANVAS dimensions (not drawn content)
+  // This ensures predictable 1:1 mapping: canvas coords → output coords
+  const scaleX = targetWidth / canvasWidth;
+  const scaleY = targetHeight / canvasHeight;
   const scale = Math.min(scaleX, scaleY);
 
-  // Center the output
-  const outputWidth = inputWidth * scale;
-  const outputHeight = inputHeight * scale;
-  const centerOffsetX = (targetWidth - outputWidth) / 2;
-  const centerOffsetY = (targetHeight - outputHeight) / 2;
+  // Center the canvas content within target area (when aspect ratios differ)
+  const scaledCanvasWidth = canvasWidth * scale;
+  const scaledCanvasHeight = canvasHeight * scale;
+  const centerOffsetX = (targetWidth - scaledCanvasWidth) / 2;
+  const centerOffsetY = (targetHeight - scaledCanvasHeight) / 2;
 
-  // Transform function
+  // Calculate actual output dimensions of drawn content
+  const outputWidth = (maxX - minX) * scale;
+  const outputHeight = (maxY - minY) * scale;
+
+  // Transform function: canvas coords (0,0)-(canvasW,canvasH) → output coords
   const transform = (p: Point): Point => {
-    const x = (p[0] - minX) * scale + offsetX + centerOffsetX;
-    const y = (p[1] - minY) * scale + offsetY + centerOffsetY;
+    const x = p[0] * scale + offsetX + centerOffsetX;
+    const y = p[1] * scale + offsetY + centerOffsetY;
     return [x, y];
   };
 
