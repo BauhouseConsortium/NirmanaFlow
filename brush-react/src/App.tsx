@@ -260,12 +260,12 @@ export default function App() {
   const handlePlacementConfirm = useCallback((x: number, y: number) => {
     if (placementMode) {
       const { colorIndex } = placementMode;
-      updateSetting(`colorWell${colorIndex}X` as keyof typeof settings, x);
-      updateSetting(`colorWell${colorIndex}Y` as keyof typeof settings, y);
+      updateSetting(`colorWell${colorIndex}X` as keyof VectorSettings, x);
+      updateSetting(`colorWell${colorIndex}Y` as keyof VectorSettings, y);
       log(`Color ${colorIndex} well position set to X:${x} Y:${y}`, 'success');
       setPlacementMode(null);
     }
-  }, [placementMode, updateSetting, log, settings]);
+  }, [placementMode, updateSetting, log]);
 
   const handlePlacementCancel = useCallback(() => {
     setPlacementMode(null);
