@@ -22,7 +22,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [placementMode, setPlacementMode] = useState<{ colorIndex: 1 | 2 | 3 | 4; color: string } | null>(null);
 
-  const { settings, updateSetting, resetSettings } = useVectorSettings();
+  const { settings, updateSetting, resetSettings, loadSettings } = useVectorSettings();
   const colorWells = useMemo(() => getColorWells(settings), [settings]);
   const { logs, log, clear } = useConsole();
   const lastExecutionRef = useRef<FlowExecutionResult | null>(null);
@@ -378,7 +378,10 @@ export default function App() {
                         settings={settings}
                         onUpdate={updateSetting}
                         onReset={resetSettings}
+                        onLoad={loadSettings}
                         onSetColorWellPosition={handleSetColorWellPosition}
+                        onJogToPosition={fluidNC.goToXY}
+                        isConnected={fluidNC.isConnected}
                       />
                     </div>
                   </Allotment.Pane>

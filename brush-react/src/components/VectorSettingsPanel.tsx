@@ -8,13 +8,44 @@ interface VectorSettingsPanelProps {
   onReset: () => void;
   onLoad: (settings: Partial<VectorSettings>) => void;
   onSetColorWellPosition?: (colorIndex: 1 | 2 | 3 | 4) => void;
+  onJogToPosition?: (x: number, y: number) => void;
+  isConnected?: boolean;
 }
 
 type Section = 'canvas' | 'output' | 'machine' | 'ink' | 'palette' | 'hardware';
 
-export function VectorSettingsPanel({ settings, onUpdate, onReset, onSetColorWellPosition }: VectorSettingsPanelProps) {
+export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSetColorWellPosition, onJogToPosition, isConnected }: VectorSettingsPanelProps) {
   const colorWells = getColorWells(settings);
   const [expandedSection, setExpandedSection] = useState<Section | null>('canvas');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSave = () => {
+    const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'nirmana-settings.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleLoadFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const loadedSettings = JSON.parse(content) as Partial<VectorSettings>;
+        onLoad(loadedSettings);
+      } catch (err) {
+        alert('Failed to load settings: ' + (err instanceof Error ? err.message : String(err)));
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = '';
+  };
 
   const toggle = (section: Section) => {
     setExpandedSection(prev => prev === section ? null : section);
@@ -78,12 +109,37 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onSetColorWel
     <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
       <div className="px-3 py-2 border-b border-slate-700 flex items-center justify-between">
         <h3 className="text-sm font-medium text-slate-300">Settings</h3>
-        <button
-          onClick={onReset}
-          className="text-xs text-slate-500 hover:text-slate-300"
-        >
-          Reset
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="text-xs text-slate-500 hover:text-slate-300"
+            title="Load settings from file"
+          >
+            Load
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleLoadFile}
+            className="hidden"
+          />
+          <button
+            onClick={handleSave}
+            className="text-xs text-slate-500 hover:text-slate-300"
+            title="Save settings to file"
+          >
+            Save
+          </button>
+          <span className="text-slate-600">|</span>
+          <button
+            onClick={onReset}
+            className="text-xs text-slate-500 hover:text-slate-300"
+            title="Reset to defaults"
+          >
+            Reset
+          </button>
+        </div>
       </div>
 
       <Section id="canvas" title="Canvas">
@@ -138,24 +194,60 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onSetColorWel
           max={100}
           unit="mm"
         />
-        <div className="space-y-1">
-          <label className="text-xs text-slate-400">Ink Well</label>
-          <div className="flex gap-1">
-            {colorWells.map((well) => (
-              <button
-                key={well.id}
-                onClick={() => onUpdate('mainColor', well.id)}
-                className={`flex-1 py-2 rounded-lg border-2 transition-all ${
-                  settings.mainColor === well.id
-                    ? 'border-white scale-105'
-                    : 'border-transparent opacity-60 hover:opacity-100'
-                }`}
-                style={{ backgroundColor: well.color }}
-                title={`Ink well ${well.id}`}
-              >
-                <span className="text-white text-xs font-bold drop-shadow-md">{well.id}</span>
-              </button>
-            ))}
+        <div className="space-y-2">
+          <label className="text-xs text-slate-400">Default Ink Color</label>
+          <div className="flex items-center justify-center gap-3 py-2 px-3 bg-slate-900/50 rounded-lg">
+            {colorWells.map((well) => {
+              const isSelected = settings.mainColor === well.id;
+              return (
+                <button
+                  key={well.id}
+                  onClick={() => onUpdate('mainColor', well.id)}
+                  className={`relative group transition-all duration-200 ${
+                    isSelected ? 'scale-110' : 'hover:scale-105'
+                  }`}
+                  title={`Ink well ${well.id}`}
+                >
+                  {/* Glow effect */}
+                  {isSelected && (
+                    <div
+                      className="absolute inset-0 rounded-full blur-md opacity-60"
+                      style={{ backgroundColor: well.color }}
+                    />
+                  )}
+                  {/* Outer ring */}
+                  <div
+                    className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900'
+                        : 'opacity-70 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: well.color }}
+                  >
+                    {/* Ink drop icon */}
+                    <svg
+                      className={`w-4 h-4 transition-all ${
+                        isSelected ? 'text-white' : 'text-white/70'
+                      }`}
+                      fill="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="M12 2c-5.33 8.33-8 12.67-8 16a8 8 0 1 0 16 0c0-3.33-2.67-7.67-8-16z" />
+                    </svg>
+                  </div>
+                  {/* Number badge */}
+                  <span
+                    className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center transition-all ${
+                      isSelected
+                        ? 'bg-white text-slate-900'
+                        : 'bg-slate-700 text-slate-300 group-hover:bg-slate-600'
+                    }`}
+                  >
+                    {well.id}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </Section>
@@ -254,55 +346,88 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onSetColorWel
             type="checkbox"
             checked={settings.colorPaletteEnabled}
             onChange={e => onUpdate('colorPaletteEnabled', e.target.checked)}
-            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500"
+            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-purple-500 focus:ring-purple-500 focus:ring-offset-0"
           />
         </div>
+
         {settings.colorPaletteEnabled && (
-          <div className="space-y-3 mt-2">
-            {colorWells.map((well) => (
-              <div key={well.id} className="bg-slate-900/50 rounded-lg p-2 space-y-2">
-                <div className="flex items-center gap-2">
+          <div className="mt-3 rounded-lg border border-slate-700/50 overflow-hidden">
+            {colorWells.map((well, index) => (
+              <div
+                key={well.id}
+                className={`flex items-center gap-3 py-2 px-3 ${
+                  index !== colorWells.length - 1 ? 'border-b border-slate-700/30' : ''
+                } hover:bg-slate-800/30 transition-colors`}
+              >
+                {/* Color indicator */}
+                <div className="relative">
                   <div
-                    className="w-4 h-4 rounded-full border-2 border-white/30"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-xs font-semibold text-white shadow-sm"
                     style={{ backgroundColor: well.color }}
-                  />
-                  <span className="text-xs text-slate-300 font-medium">Color {well.id}</span>
+                  >
+                    {well.id}
+                  </div>
+                  {/* Color picker overlay */}
                   <input
                     type="color"
                     value={well.color}
                     onChange={e => onUpdate(`colorWell${well.id}Color` as keyof VectorSettings, e.target.value)}
-                    className="ml-auto w-6 h-6 rounded cursor-pointer bg-transparent"
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    title="Change color"
                   />
                 </div>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1 flex-1">
-                    <span className="text-xs text-slate-500">X:</span>
-                    <input
-                      type="number"
-                      value={well.x}
-                      onChange={e => onUpdate(`colorWell${well.id}X` as keyof VectorSettings, Number(e.target.value))}
-                      className="w-14 px-1 py-0.5 text-xs bg-slate-800 border border-slate-600 rounded text-white text-right"
-                    />
-                  </div>
-                  <div className="flex items-center gap-1 flex-1">
-                    <span className="text-xs text-slate-500">Y:</span>
-                    <input
-                      type="number"
-                      value={well.y}
-                      onChange={e => onUpdate(`colorWell${well.id}Y` as keyof VectorSettings, Number(e.target.value))}
-                      className="w-14 px-1 py-0.5 text-xs bg-slate-800 border border-slate-600 rounded text-white text-right"
-                    />
-                  </div>
+
+                {/* Coordinates */}
+                <div className="flex items-center gap-1 flex-1">
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wide">x</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={well.x}
+                    onChange={e => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val)) onUpdate(`colorWell${well.id}X` as keyof VectorSettings, val);
+                    }}
+                    className="w-10 px-1 py-0.5 text-xs bg-slate-800/60 border border-slate-700/50 rounded text-white text-center focus:border-slate-500 focus:outline-none"
+                  />
+                  <span className="text-[10px] text-slate-500 uppercase tracking-wide ml-1">y</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={well.y}
+                    onChange={e => {
+                      const val = parseInt(e.target.value, 10);
+                      if (!isNaN(val)) onUpdate(`colorWell${well.id}Y` as keyof VectorSettings, val);
+                    }}
+                    className="w-10 px-1 py-0.5 text-xs bg-slate-800/60 border border-slate-700/50 rounded text-white text-center focus:border-slate-500 focus:outline-none"
+                  />
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-0.5">
                   <button
                     onClick={() => onSetColorWellPosition?.(well.id)}
-                    className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded flex items-center gap-1"
-                    title="Click to set position on canvas"
+                    className="p-1.5 rounded text-slate-500 hover:text-white hover:bg-slate-700/50 transition-colors"
+                    title="Pick on preview"
                   >
-                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                     </svg>
-                    Set
+                  </button>
+                  <button
+                    onClick={() => onJogToPosition?.(well.x, well.y)}
+                    disabled={!isConnected}
+                    className={`p-1.5 rounded transition-colors ${
+                      isConnected
+                        ? 'text-slate-500 hover:text-green-400 hover:bg-green-500/10'
+                        : 'text-slate-700 cursor-not-allowed'
+                    }`}
+                    title={isConnected ? "Jog to position" : "Connect first"}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                    </svg>
                   </button>
                 </div>
               </div>

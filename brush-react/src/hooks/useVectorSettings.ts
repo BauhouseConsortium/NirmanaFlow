@@ -175,6 +175,27 @@ export function useVectorSettings() {
     setValidationErrors({});
   }, []);
 
+  // Load settings from a partial object (merges with defaults and validates)
+  const loadSettings = useCallback((partial: Partial<VectorSettings>) => {
+    const merged = { ...DEFAULT_SETTINGS, ...partial };
+    const result = validateSettings(merged);
+
+    if (result.success && result.data) {
+      setSettings(result.data);
+      setValidationErrors({});
+    } else if (result.errors) {
+      // Still load what we can, but report errors
+      const validatedPartial: Partial<VectorSettings> = {};
+      for (const key of Object.keys(partial) as (keyof VectorSettings)[]) {
+        const fieldResult = validateSetting(key, partial[key]);
+        if (fieldResult.success && fieldResult.data !== undefined) {
+          (validatedPartial as Record<string, unknown>)[key] = fieldResult.data;
+        }
+      }
+      setSettings(prev => ({ ...prev, ...validatedPartial }));
+    }
+  }, []);
+
   // Memoized derived values for performance
   const scale = useMemo(() => ({
     x: settings.targetWidth / settings.canvasWidth,
@@ -188,6 +209,7 @@ export function useVectorSettings() {
     updateSetting,
     updateSettingUnsafe,
     resetSettings,
+    loadSettings,
     validationErrors,
     isValid,
     scale,

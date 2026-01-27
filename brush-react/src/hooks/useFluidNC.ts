@@ -280,6 +280,11 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
     return send(`G0 X0 Y0 F${feedRate}`);
   }, [send]);
 
+  // Go to specific X,Y position (absolute)
+  const goToXY = useCallback((x: number, y: number, feedRate = 2000): boolean => {
+    return send(`G90 G0 X${x.toFixed(2)} Y${y.toFixed(2)} F${feedRate}`);
+  }, [send]);
+
   // Go to specific Z position
   const goToZ = useCallback((z: number, feedRate = 500): boolean => {
     return send(`G0 Z${z.toFixed(3)} F${feedRate}`);
@@ -469,6 +474,7 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
     unlock,
     setZero,
     goToZero,
+    goToXY,
     goToZ,
     // Streaming methods
     startStreaming,
