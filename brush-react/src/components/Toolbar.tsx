@@ -103,18 +103,18 @@ function ToolbarComponent({
 }: ToolbarProps) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      {/* Run button */}
+      {/* Regenerate G-code button */}
       <button
         onClick={onRun}
         disabled={isLoading}
-        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-500
-                   disabled:bg-green-800 disabled:opacity-50 text-white rounded-lg
-                   transition-colors text-sm font-medium"
+        title="Regenerate G-code with current settings"
+        className="flex items-center justify-center w-8 h-8 bg-slate-700 hover:bg-slate-600
+                   disabled:bg-slate-800 disabled:opacity-50 text-white rounded-lg
+                   transition-colors"
       >
-        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-          <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
         </svg>
-        Run
       </button>
 
       <div className="h-6 w-px bg-slate-700" />
