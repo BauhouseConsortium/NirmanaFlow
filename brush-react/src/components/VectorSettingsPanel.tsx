@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import type { VectorSettings } from '../hooks/useVectorSettings';
 import { getColorWells } from '../hooks/useVectorSettings';
 
@@ -6,6 +6,7 @@ interface VectorSettingsPanelProps {
   settings: VectorSettings;
   onUpdate: <K extends keyof VectorSettings>(key: K, value: VectorSettings[K]) => void;
   onReset: () => void;
+  onLoad: (settings: Partial<VectorSettings>) => void;
   onSetColorWellPosition?: (colorIndex: 1 | 2 | 3 | 4) => void;
 }
 
@@ -137,28 +138,26 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onSetColorWel
           max={100}
           unit="mm"
         />
-        {settings.colorPaletteEnabled && (
-          <div className="space-y-1">
-            <label className="text-xs text-slate-400">Main Color</label>
-            <div className="flex gap-1">
-              {colorWells.map((well) => (
-                <button
-                  key={well.id}
-                  onClick={() => onUpdate('mainColor', well.id)}
-                  className={`flex-1 py-2 rounded-lg border-2 transition-all ${
-                    settings.mainColor === well.id
-                      ? 'border-white scale-105'
-                      : 'border-transparent opacity-60 hover:opacity-100'
-                  }`}
-                  style={{ backgroundColor: well.color }}
-                  title={`Color ${well.id}`}
-                >
-                  <span className="text-white text-xs font-bold drop-shadow-md">{well.id}</span>
-                </button>
-              ))}
-            </div>
+        <div className="space-y-1">
+          <label className="text-xs text-slate-400">Ink Well</label>
+          <div className="flex gap-1">
+            {colorWells.map((well) => (
+              <button
+                key={well.id}
+                onClick={() => onUpdate('mainColor', well.id)}
+                className={`flex-1 py-2 rounded-lg border-2 transition-all ${
+                  settings.mainColor === well.id
+                    ? 'border-white scale-105'
+                    : 'border-transparent opacity-60 hover:opacity-100'
+                }`}
+                style={{ backgroundColor: well.color }}
+                title={`Ink well ${well.id}`}
+              >
+                <span className="text-white text-xs font-bold drop-shadow-md">{well.id}</span>
+              </button>
+            ))}
           </div>
-        )}
+        </div>
       </Section>
 
       <Section id="machine" title="Machine">

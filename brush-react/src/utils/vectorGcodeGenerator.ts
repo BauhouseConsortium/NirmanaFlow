@@ -194,13 +194,8 @@ export function generateVectorGCode(
 
   // Get dip position based on color
   const getDipPosition = (pathColor: number | undefined) => {
-    if (colorPaletteEnabled) {
-      // Use path-specific color if set, otherwise use mainColor
-      const colorIndex = pathColor ?? mainColor;
-      return getColorWellPosition(colorIndex, settings);
-    }
-    // When color palette is disabled, use default dip position
-    return { x: dipX, y: dipY };
+    const colorIndex = colorPaletteEnabled ? (pathColor ?? mainColor) : mainColor;
+    return getColorWellPosition(colorIndex, settings);
   };
 
   // Track current color for dipping

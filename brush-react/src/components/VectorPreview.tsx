@@ -624,7 +624,7 @@ function VectorPreviewComponent({
     }
 
     // Draw color wells (when multi-color mode is enabled)
-    if (colorWells.length > 0 && !simState) {
+    if (colorWells.length > 0) {
       for (const well of colorWells) {
         const [wx, wy] = toScreen(well.x, well.y);
 
@@ -1014,10 +1014,8 @@ export const VectorPreview = memo(VectorPreviewComponent, (prev, next) => {
   // Compare paths - always re-render if reference changed (paths content may differ)
   if (prev.paths !== next.paths) return false;
 
-  // Compare gcodeLines by reference
-  if (prev.gcodeLines !== next.gcodeLines) {
-    if (prev.gcodeLines?.length !== next.gcodeLines?.length) return false;
-  }
+  // Compare gcodeLines - always re-render if reference changed (content may differ)
+  if (prev.gcodeLines !== next.gcodeLines) return false;
 
   // Compare outputSettings
   if (prev.outputSettings !== next.outputSettings) {

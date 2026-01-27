@@ -106,6 +106,39 @@ export default function App() {
     };
   }, [paths.length, gcodeResult?.lines.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-regenerate G-code when dip-related settings change
+  useEffect(() => {
+    if (paths.length > 0) {
+      const gcode = generateVectorGCode(paths, settings);
+      setGcodeResult(gcode);
+    }
+  }, [
+    paths,
+    settings.mainColor,
+    settings.dipX,
+    settings.dipY,
+    settings.dipInterval,
+    settings.continuousPlot,
+    settings.colorPaletteEnabled,
+    settings.colorWell1X,
+    settings.colorWell1Y,
+    settings.colorWell2X,
+    settings.colorWell2Y,
+    settings.colorWell3X,
+    settings.colorWell3Y,
+    settings.colorWell4X,
+    settings.colorWell4Y,
+    settings.targetWidth,
+    settings.targetHeight,
+    settings.offsetX,
+    settings.offsetY,
+    settings.feedRate,
+    settings.backlashX,
+    settings.backlashY,
+    settings.safeZ,
+    settings.artefactThreshold,
+  ]);
+
   const handleRun = useCallback(() => {
     // Re-generate G-code with current settings
     if (paths.length > 0) {
