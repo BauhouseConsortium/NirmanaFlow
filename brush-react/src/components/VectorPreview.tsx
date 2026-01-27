@@ -1200,6 +1200,23 @@ function VectorPreviewComponent({
                 </button>
               </div>
 
+              {/* Save PNG */}
+              <button
+                onClick={() => {
+                  if (!canvasRef.current) return;
+                  const link = document.createElement('a');
+                  link.download = 'preview.png';
+                  link.href = canvasRef.current.toDataURL('image/png');
+                  link.click();
+                }}
+                className="w-7 h-7 rounded flex items-center justify-center transition-colors bg-slate-700/50 text-slate-500 hover:text-slate-300 hover:bg-slate-700"
+                title="Save as PNG"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </button>
+
               {/* Divider */}
               <div className="w-px h-6 bg-slate-600/50" />
 
