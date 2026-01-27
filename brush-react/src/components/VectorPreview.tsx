@@ -948,15 +948,26 @@ function VectorPreviewComponent({
           const ch = dimensions.height;
           const useGCode = parsedGCode.paths.length > 0;
           const bounds = parsedGCode.bounds;
-          // Must match drawCanvas conditional logic
+          // Must match drawCanvas conditional logic EXACTLY
           let viewMinX: number, viewMinY: number, viewMaxX: number, viewMaxY: number;
-          if (useGCode) {
+          if (useGCode && outputSettings) {
+            // G-code paths exist: show machine coordinate space (origin to work area bounds)
+            const margin = 5;
+            const workAreaMaxX = outputSettings.offsetX + outputSettings.targetWidth;
+            const workAreaMaxY = outputSettings.offsetY + outputSettings.targetHeight;
+            viewMinX = -margin;
+            viewMinY = -margin;
+            viewMaxX = workAreaMaxX + margin;
+            viewMaxY = workAreaMaxY + margin;
+          } else if (useGCode) {
+            // G-code paths but no outputSettings: use G-code bounds
             const margin = 5;
             viewMinX = bounds.minX - margin;
             viewMinY = bounds.minY - margin;
             viewMaxX = bounds.maxX + margin;
             viewMaxY = bounds.maxY + margin;
           } else {
+            // No G-code: use canvas coordinate space for canvas paths
             viewMinX = 0;
             viewMinY = 0;
             viewMaxX = width;
@@ -988,15 +999,26 @@ function VectorPreviewComponent({
           const ch = dimensions.height;
           const useGCode = parsedGCode.paths.length > 0;
           const bounds = parsedGCode.bounds;
-          // Must match drawCanvas conditional logic
+          // Must match drawCanvas conditional logic EXACTLY
           let viewMinX: number, viewMinY: number, viewMaxX: number, viewMaxY: number;
-          if (useGCode) {
+          if (useGCode && outputSettings) {
+            // G-code paths exist: show machine coordinate space (origin to work area bounds)
+            const margin = 5;
+            const workAreaMaxX = outputSettings.offsetX + outputSettings.targetWidth;
+            const workAreaMaxY = outputSettings.offsetY + outputSettings.targetHeight;
+            viewMinX = -margin;
+            viewMinY = -margin;
+            viewMaxX = workAreaMaxX + margin;
+            viewMaxY = workAreaMaxY + margin;
+          } else if (useGCode) {
+            // G-code paths but no outputSettings: use G-code bounds
             const margin = 5;
             viewMinX = bounds.minX - margin;
             viewMinY = bounds.minY - margin;
             viewMaxX = bounds.maxX + margin;
             viewMaxY = bounds.maxY + margin;
           } else {
+            // No G-code: use canvas coordinate space for canvas paths
             viewMinX = 0;
             viewMinY = 0;
             viewMaxX = width;
