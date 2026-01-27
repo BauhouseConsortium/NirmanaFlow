@@ -49,6 +49,9 @@ export interface VectorSettings {
 
   // Filter settings
   artefactThreshold: number;
+
+  // Clipping
+  clipToWorkArea: boolean;
 }
 
 export interface GeneratedVectorGCode {
@@ -70,6 +73,121 @@ function distance(p1: Point, p2: Point): number {
   const dx = p2[0] - p1[0];
   const dy = p2[1] - p1[1];
   return Math.sqrt(dx * dx + dy * dy);
+}
+
+// Cohen-Sutherland line clipping algorithm
+const INSIDE = 0;
+const LEFT = 1;
+const RIGHT = 2;
+const BOTTOM = 4;
+const TOP = 8;
+
+function computeOutCode(x: number, y: number, xMin: number, yMin: number, xMax: number, yMax: number): number {
+  let code = INSIDE;
+  if (x < xMin) code |= LEFT;
+  else if (x > xMax) code |= RIGHT;
+  if (y < yMin) code |= BOTTOM;
+  else if (y > yMax) code |= TOP;
+  return code;
+}
+
+function clipLineToRect(
+  x0: number, y0: number, x1: number, y1: number,
+  xMin: number, yMin: number, xMax: number, yMax: number
+): [number, number, number, number] | null {
+  let outcode0 = computeOutCode(x0, y0, xMin, yMin, xMax, yMax);
+  let outcode1 = computeOutCode(x1, y1, xMin, yMin, xMax, yMax);
+  let accept = false;
+
+  while (true) {
+    if (!(outcode0 | outcode1)) {
+      // Both inside
+      accept = true;
+      break;
+    } else if (outcode0 & outcode1) {
+      // Both outside same region
+      break;
+    } else {
+      const outcodeOut = outcode1 > outcode0 ? outcode1 : outcode0;
+      let x = 0, y = 0;
+
+      if (outcodeOut & TOP) {
+        x = x0 + (x1 - x0) * (yMax - y0) / (y1 - y0);
+        y = yMax;
+      } else if (outcodeOut & BOTTOM) {
+        x = x0 + (x1 - x0) * (yMin - y0) / (y1 - y0);
+        y = yMin;
+      } else if (outcodeOut & RIGHT) {
+        y = y0 + (y1 - y0) * (xMax - x0) / (x1 - x0);
+        x = xMax;
+      } else if (outcodeOut & LEFT) {
+        y = y0 + (y1 - y0) * (xMin - x0) / (x1 - x0);
+        x = xMin;
+      }
+
+      if (outcodeOut === outcode0) {
+        x0 = x;
+        y0 = y;
+        outcode0 = computeOutCode(x0, y0, xMin, yMin, xMax, yMax);
+      } else {
+        x1 = x;
+        y1 = y;
+        outcode1 = computeOutCode(x1, y1, xMin, yMin, xMax, yMax);
+      }
+    }
+  }
+
+  return accept ? [x0, y0, x1, y1] : null;
+}
+
+// Clip a path to a rectangle, returning multiple path segments
+function clipPathToRect(
+  path: Point[],
+  xMin: number, yMin: number, xMax: number, yMax: number
+): Point[][] {
+  if (path.length < 2) return [];
+
+  const result: Point[][] = [];
+  let currentSegment: Point[] = [];
+
+  for (let i = 0; i < path.length - 1; i++) {
+    const [x0, y0] = path[i];
+    const [x1, y1] = path[i + 1];
+
+    const clipped = clipLineToRect(x0, y0, x1, y1, xMin, yMin, xMax, yMax);
+
+    if (clipped) {
+      const [cx0, cy0, cx1, cy1] = clipped;
+
+      // Check if we need to start a new segment (discontinuity)
+      if (currentSegment.length === 0) {
+        currentSegment.push([cx0, cy0]);
+      } else {
+        const lastPoint = currentSegment[currentSegment.length - 1];
+        // If there's a gap, start new segment
+        if (Math.abs(lastPoint[0] - cx0) > 0.01 || Math.abs(lastPoint[1] - cy0) > 0.01) {
+          if (currentSegment.length >= 2) {
+            result.push(currentSegment);
+          }
+          currentSegment = [[cx0, cy0]];
+        }
+      }
+      currentSegment.push([cx1, cy1]);
+    } else {
+      // Line completely outside - end current segment
+      if (currentSegment.length >= 2) {
+        result.push(currentSegment);
+      }
+      currentSegment = [];
+    }
+  }
+
+  // Don't forget the last segment
+  if (currentSegment.length >= 2) {
+    result.push(currentSegment);
+  }
+
+  return result;
 }
 
 // Helper to get dip position for a color
@@ -113,6 +231,7 @@ export function generateVectorGCode(
     colorPaletteEnabled,
     mainColor,
     artefactThreshold,
+    clipToWorkArea,
   } = settings;
 
   // Filter tiny paths (using points from ColoredPath)
@@ -214,50 +333,76 @@ export function generateVectorGCode(
     lines.push(`G0 Z${safeZ}`);
   }
 
-  // Process each path
+  // Work area bounds for clipping
+  const workAreaMinX = offsetX;
+  const workAreaMinY = offsetY;
+  const workAreaMaxX = offsetX + targetWidth;
+  const workAreaMaxY = offsetY + targetHeight;
+
+  // Process each path (with optional clipping)
   for (const coloredPath of filteredPaths) {
     if (coloredPath.points.length === 0) continue;
 
     const transformedPath = coloredPath.points.map(transform);
-    const firstPoint = transformedPath[0];
     const pathColor = coloredPath.color;
 
-    // Travel to start
-    if (lastPoint) {
-      travelDistance += distance(lastPoint, firstPoint);
+    // Apply clipping if enabled
+    let pathsToProcess: Point[][];
+    if (clipToWorkArea) {
+      pathsToProcess = clipPathToRect(
+        transformedPath,
+        workAreaMinX,
+        workAreaMinY,
+        workAreaMaxX,
+        workAreaMaxY
+      );
+      if (pathsToProcess.length === 0) continue; // Entirely outside
+    } else {
+      pathsToProcess = [transformedPath];
     }
 
-    let first = true;
-    for (const [tx, ty] of transformedPath) {
-      if (first) {
-        lines.push(...backlash.process(tx, ty, true, feedRate));
-        lines.push('G1 Z0 F500'); // Pen down
-        first = false;
-      } else {
-        lines.push(...backlash.process(tx, ty, false, feedRate));
+    // Process each clipped segment
+    for (const segmentPath of pathsToProcess) {
+      if (segmentPath.length === 0) continue;
+      const firstPoint = segmentPath[0];
 
-        // Accumulate distance
-        if (lastPoint) {
-          const d = distance(lastPoint, [tx, ty]);
-          distanceAccumulator += d;
-          totalDistance += d;
-        }
+      // Travel to start
+      if (lastPoint) {
+        travelDistance += distance(lastPoint, firstPoint);
       }
-      lastPoint = [tx, ty];
-    }
 
-    lines.push(`G0 Z${safeZ}`); // Pen up
+      let first = true;
+      for (const [tx, ty] of segmentPath) {
+        if (first) {
+          lines.push(...backlash.process(tx, ty, true, feedRate));
+          lines.push('G1 Z0 F500'); // Pen down
+          first = false;
+        } else {
+          lines.push(...backlash.process(tx, ty, false, feedRate));
 
-    // Check for dip - use current path's color for dip position
-    if (!continuousPlot && distanceAccumulator > dipInterval) {
-      dipCount++;
-      const dipPos = getDipPosition(pathColor);
-      lines.push(`(Dip #${dipCount} at dist ${distanceAccumulator.toFixed(1)}${colorPaletteEnabled ? ` - Color ${pathColor ?? mainColor}` : ''})`);
-      lines.push(`G0 X${dipPos.x} Y${dipPos.y}`);
-      lines.push('G1 Z-2 F500');
-      lines.push('G4 P0.5');
-      lines.push(`G0 Z${safeZ}`);
-      distanceAccumulator = 0;
+          // Accumulate distance
+          if (lastPoint) {
+            const d = distance(lastPoint, [tx, ty]);
+            distanceAccumulator += d;
+            totalDistance += d;
+          }
+        }
+        lastPoint = [tx, ty];
+      }
+
+      lines.push(`G0 Z${safeZ}`); // Pen up
+
+      // Check for dip - use current path's color for dip position
+      if (!continuousPlot && distanceAccumulator > dipInterval) {
+        dipCount++;
+        const dipPos = getDipPosition(pathColor);
+        lines.push(`(Dip #${dipCount} at dist ${distanceAccumulator.toFixed(1)}${colorPaletteEnabled ? ` - Color ${pathColor ?? mainColor}` : ''})`);
+        lines.push(`G0 X${dipPos.x} Y${dipPos.y}`);
+        lines.push('G1 Z-2 F500');
+        lines.push('G4 P0.5');
+        lines.push(`G0 Z${safeZ}`);
+        distanceAccumulator = 0;
+      }
     }
   }
 

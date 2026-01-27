@@ -38,6 +38,7 @@ interface VectorPreviewProps {
   machinePosition?: MachinePosition | null;
   isConnected?: boolean;
   outputSettings?: OutputSettings;
+  clipToWorkArea?: boolean;
   // Color well placement mode
   placementMode?: ColorWellPlacement | null;
   onPlacementConfirm?: (x: number, y: number) => void;
@@ -231,6 +232,7 @@ function VectorPreviewComponent({
   machinePosition = null,
   isConnected = false,
   outputSettings,
+  clipToWorkArea = false,
   placementMode = null,
   onPlacementConfirm,
   onPlacementCancel,
@@ -339,6 +341,10 @@ function VectorPreviewComponent({
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
 
+    // Clear any stray state
+    ctx.setLineDash([]);
+    ctx.beginPath();
+
     // Background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, cw, ch);
@@ -347,19 +353,29 @@ function VectorPreviewComponent({
     const useGCode = parsedGCode.paths.length > 0;
     const { bounds } = parsedGCode;
 
-    // Calculate viewport - add padding around content
+    // Calculate viewport based on coordinate space being used
     const padding = 10;
     let viewMinX: number, viewMinY: number, viewMaxX: number, viewMaxY: number;
 
-    if (useGCode) {
-      // Use G-code bounds with some margin
+    if (useGCode && outputSettings) {
+      // G-code paths exist: show machine coordinate space (origin to work area bounds)
+      const margin = 5;
+      const workAreaMaxX = outputSettings.offsetX + outputSettings.targetWidth;
+      const workAreaMaxY = outputSettings.offsetY + outputSettings.targetHeight;
+
+      viewMinX = -margin;
+      viewMinY = -margin;
+      viewMaxX = workAreaMaxX + margin;
+      viewMaxY = workAreaMaxY + margin;
+    } else if (useGCode) {
+      // G-code paths but no outputSettings: use G-code bounds
       const margin = 5;
       viewMinX = bounds.minX - margin;
       viewMinY = bounds.minY - margin;
       viewMaxX = bounds.maxX + margin;
       viewMaxY = bounds.maxY + margin;
     } else {
-      // Use canvas coordinate space
+      // No G-code: use canvas coordinate space for canvas paths
       viewMinX = 0;
       viewMinY = 0;
       viewMaxX = width;
@@ -404,6 +420,36 @@ function VectorPreviewComponent({
       ctx.moveTo(0, sy);
       ctx.lineTo(cw, sy);
       ctx.stroke();
+    }
+
+    // Draw work area border (only when showing G-code in machine coordinates)
+    if (outputSettings && useGCode) {
+      const { targetWidth, targetHeight, offsetX, offsetY } = outputSettings;
+      const [waX1, waY1] = toScreen(offsetX, offsetY);
+      const [waX2, waY2] = toScreen(offsetX + targetWidth, offsetY + targetHeight);
+
+      // Ensure clean state before drawing border
+      ctx.setLineDash([6, 4]);
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.rect(waX1, waY1, waX2 - waX1, waY2 - waY1);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Work area label
+      ctx.fillStyle = '#3b82f6';
+      ctx.font = '10px system-ui';
+      ctx.textAlign = 'left';
+      ctx.fillText(`${targetWidth}×${targetHeight}mm`, waX1 + 4, waY1 - 4);
+
+      // Apply canvas clipping if enabled
+      if (clipToWorkArea) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(waX1, waY1, waX2 - waX1, waY2 - waY1);
+        ctx.clip();
+      }
     }
 
     // Draw paths
@@ -457,6 +503,11 @@ function VectorPreviewComponent({
         }
         ctx.stroke();
       }
+    }
+
+    // Restore canvas state if clipping was applied
+    if (outputSettings && useGCode && clipToWorkArea) {
+      ctx.restore();
     }
 
     // Draw simulation state (always in G-code coordinates when useGCode)
@@ -701,7 +752,7 @@ function VectorPreviewComponent({
       ctx.textAlign = 'left';
       ctx.fillText(statsText, 8, ch - 10);
     }
-  }, [paths, dimensions, width, height, isConnected, machinePosition, parsedGCode, colorWells, placementMode, clickedPosition, hoverPosition]);
+  }, [paths, dimensions, width, height, isConnected, machinePosition, parsedGCode, colorWells, placementMode, clickedPosition, hoverPosition, outputSettings, clipToWorkArea]);
 
   // Store drawCanvas in a ref to avoid dependency loops
   const drawCanvasRef = useRef(drawCanvas);
@@ -1050,6 +1101,9 @@ export const VectorPreview = memo(VectorPreviewComponent, (prev, next) => {
   if (prev.colorWells !== next.colorWells) {
     if (prev.colorWells?.length !== next.colorWells?.length) return false;
   }
+
+  // Clip setting changes
+  if (prev.clipToWorkArea !== next.clipToWorkArea) return false;
 
   return true;
 });

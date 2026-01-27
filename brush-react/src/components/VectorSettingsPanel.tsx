@@ -194,6 +194,15 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
           max={100}
           unit="mm"
         />
+        <div className="flex items-center justify-between">
+          <label className="text-xs text-slate-400">Clip to Work Area</label>
+          <input
+            type="checkbox"
+            checked={settings.clipToWorkArea}
+            onChange={e => onUpdate('clipToWorkArea', e.target.checked)}
+            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500"
+          />
+        </div>
         <div className="space-y-2">
           <label className="text-xs text-slate-400">Default Ink Color</label>
           <div className="flex items-center justify-center gap-3 py-2 px-3 bg-slate-900/50 rounded-lg">

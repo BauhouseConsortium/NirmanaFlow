@@ -139,6 +139,7 @@ export default function App() {
     settings.backlashY,
     settings.safeZ,
     settings.artefactThreshold,
+    settings.clipToWorkArea,
   ]);
 
   const handleRun = useCallback(() => {
@@ -341,6 +342,7 @@ export default function App() {
                     machinePosition={fluidNC.status.position}
                     isConnected={fluidNC.isConnected}
                     outputSettings={outputSettings}
+                    clipToWorkArea={settings.clipToWorkArea}
                     placementMode={placementMode}
                     onPlacementConfirm={handlePlacementConfirm}
                     onPlacementCancel={handlePlacementCancel}

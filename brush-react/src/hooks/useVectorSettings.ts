@@ -46,6 +46,9 @@ export const VectorSettingsSchema = z.object({
   // Filter
   artefactThreshold: z.number().min(0).max(10).default(0.1),
 
+  // Clipping
+  clipToWorkArea: z.boolean().default(false),
+
   // Hardware
   controllerHost: z.string().url().default('http://192.168.0.248'),
 });
@@ -140,6 +143,7 @@ export function getFieldConstraints(key: keyof VectorSettings): { min?: number; 
     colorWell4Y: { min: 0, max: 200, step: 1 },
     colorWell4Color: {},
     artefactThreshold: { min: 0, max: 10, step: 0.1 },
+    clipToWorkArea: {},
     controllerHost: {},
   };
   return constraints[key];
