@@ -13,6 +13,7 @@ import {
   type Connection,
   type Node,
   type Edge,
+  type ReactFlowInstance,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
@@ -91,6 +92,14 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
 
   // Persistent execution cache - survives across renders
   const executionCacheRef = useRef<FlowExecutionCache>(new FlowExecutionCache());
+
+  // Center the view on initial load
+  const onInit = useCallback((instance: ReactFlowInstance) => {
+    // Small delay to ensure container is properly sized
+    setTimeout(() => {
+      instance.fitView({ padding: 0.2, maxZoom: 1 });
+    }, 50);
+  }, []);
 
   // Handle edge connections
   const onConnect = useCallback(
@@ -458,6 +467,7 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onSelectionChange={onSelectionChange}
+        onInit={onInit}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         fitView
