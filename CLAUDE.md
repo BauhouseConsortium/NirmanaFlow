@@ -174,6 +174,18 @@ asdf set nodejs 24.2.0
 - Don't hardcode machine-specific values - use Settings
 - Don't break the G-code simulation timing logic
 
+### Coordinate Transformation Gotcha (VectorPreview.tsx)
+When handling mouse input on the canvas preview, the coordinate transformation logic **must exactly match** the drawing code's transformation logic. Both use:
+1. **Viewport bounds** (viewMinX, viewMinY, viewMaxX, viewMaxY)
+2. **Scale factor** (based on available width/height)
+3. **Centering offsets** (to center content when aspect ratios don't match)
+
+**Critical**: The drawing code has conditional logic for bounds:
+- With G-code paths: applies 5px margin around bounds
+- Without G-code paths: uses exact canvas dimensions (0 to width/height)
+
+If mouse handlers don't replicate this exact conditional logic, cursor positions will drift (especially noticeable at canvas edges). Always keep `drawCanvas()` viewport calculations and mouse handler calculations in sync.
+
 ### Key Files for Common Tasks
 - **Add new drawing primitive**: `src/utils/drawingApi.ts`
 - **Add new example**: `src/data/examples.ts`

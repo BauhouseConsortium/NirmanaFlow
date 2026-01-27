@@ -28,8 +28,8 @@ export const VectorSettingsSchema = z.object({
   // Main color selection (uses color well position when color palette is enabled)
   mainColor: z.number().min(1).max(4).default(1),
 
-  // Color palette (multi-color mode)
-  colorPaletteEnabled: z.boolean().default(false),
+  // Color palette (multi-color mode) - always enabled
+  colorPaletteEnabled: z.boolean().default(true),
   colorWell1X: z.number().min(0).max(200).default(41),
   colorWell1Y: z.number().min(0).max(200).default(5),
   colorWell1Color: z.string().default('#1e40af'), // Blue

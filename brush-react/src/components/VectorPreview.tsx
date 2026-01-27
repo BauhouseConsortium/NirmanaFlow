@@ -392,11 +392,17 @@ function VectorPreviewComponent({
     const scaleY = availableHeight / viewHeight;
     const scale = Math.min(scaleX, scaleY);
 
+    // Calculate centering offsets
+    const scaledWidth = viewWidth * scale;
+    const scaledHeight = viewHeight * scale;
+    const offsetX = padding + (availableWidth - scaledWidth) / 2;
+    const offsetY = padding + (availableHeight - scaledHeight) / 2;
+
     // Helper to convert coordinates to screen space
     const toScreen = (x: number, y: number): [number, number] => {
       return [
-        padding + (x - viewMinX) * scale,
-        padding + (y - viewMinY) * scale
+        offsetX + (x - viewMinX) * scale,
+        offsetY + (y - viewMinY) * scale
       ];
     };
 
@@ -934,46 +940,80 @@ function VectorPreviewComponent({
         onMouseMove={(e) => {
           if (!placementMode || !canvasRef.current || !outputSettings) return;
           const rect = canvasRef.current.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const y = e.clientY - rect.top;
-          // Convert screen coords to G-code coords
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          // Convert screen coords to G-code coords (must match drawCanvas calculations EXACTLY)
           const padding = 10;
           const cw = dimensions.width;
           const ch = dimensions.height;
+          const useGCode = parsedGCode.paths.length > 0;
           const bounds = parsedGCode.bounds;
-          const margin = 5;
-          const viewMinX = bounds.minX - margin;
-          const viewMinY = bounds.minY - margin;
-          const viewMaxX = bounds.maxX + margin;
-          const viewMaxY = bounds.maxY + margin;
+          // Must match drawCanvas conditional logic
+          let viewMinX: number, viewMinY: number, viewMaxX: number, viewMaxY: number;
+          if (useGCode) {
+            const margin = 5;
+            viewMinX = bounds.minX - margin;
+            viewMinY = bounds.minY - margin;
+            viewMaxX = bounds.maxX + margin;
+            viewMaxY = bounds.maxY + margin;
+          } else {
+            viewMinX = 0;
+            viewMinY = 0;
+            viewMaxX = width;
+            viewMaxY = height;
+          }
           const viewWidth = viewMaxX - viewMinX;
           const viewHeight = viewMaxY - viewMinY;
-          const scale = Math.min((cw - padding * 2) / viewWidth, (ch - padding * 2) / viewHeight);
-          const gcodeX = ((x - padding) / scale) + viewMinX;
-          const gcodeY = ((y - padding) / scale) + viewMinY;
+          const availableWidth = cw - padding * 2;
+          const availableHeight = ch - padding * 2;
+          const scale = Math.min(availableWidth / viewWidth, availableHeight / viewHeight);
+          // Calculate centering offsets (must match drawCanvas)
+          const scaledWidth = viewWidth * scale;
+          const scaledHeight = viewHeight * scale;
+          const offsetX = padding + (availableWidth - scaledWidth) / 2;
+          const offsetY = padding + (availableHeight - scaledHeight) / 2;
+          const gcodeX = ((mouseX - offsetX) / scale) + viewMinX;
+          const gcodeY = ((mouseY - offsetY) / scale) + viewMinY;
           setHoverPosition({ x: Math.round(gcodeX), y: Math.round(gcodeY) });
         }}
         onMouseLeave={() => setHoverPosition(null)}
         onClick={(e) => {
           if (!placementMode || !canvasRef.current || !outputSettings) return;
           const rect = canvasRef.current.getBoundingClientRect();
-          const x = e.clientX - rect.left;
-          const y = e.clientY - rect.top;
-          // Convert screen coords to G-code coords
+          const mouseX = e.clientX - rect.left;
+          const mouseY = e.clientY - rect.top;
+          // Convert screen coords to G-code coords (must match drawCanvas calculations EXACTLY)
           const padding = 10;
           const cw = dimensions.width;
           const ch = dimensions.height;
+          const useGCode = parsedGCode.paths.length > 0;
           const bounds = parsedGCode.bounds;
-          const margin = 5;
-          const viewMinX = bounds.minX - margin;
-          const viewMinY = bounds.minY - margin;
-          const viewMaxX = bounds.maxX + margin;
-          const viewMaxY = bounds.maxY + margin;
+          // Must match drawCanvas conditional logic
+          let viewMinX: number, viewMinY: number, viewMaxX: number, viewMaxY: number;
+          if (useGCode) {
+            const margin = 5;
+            viewMinX = bounds.minX - margin;
+            viewMinY = bounds.minY - margin;
+            viewMaxX = bounds.maxX + margin;
+            viewMaxY = bounds.maxY + margin;
+          } else {
+            viewMinX = 0;
+            viewMinY = 0;
+            viewMaxX = width;
+            viewMaxY = height;
+          }
           const viewWidth = viewMaxX - viewMinX;
           const viewHeight = viewMaxY - viewMinY;
-          const scale = Math.min((cw - padding * 2) / viewWidth, (ch - padding * 2) / viewHeight);
-          const gcodeX = ((x - padding) / scale) + viewMinX;
-          const gcodeY = ((y - padding) / scale) + viewMinY;
+          const availableWidth = cw - padding * 2;
+          const availableHeight = ch - padding * 2;
+          const scale = Math.min(availableWidth / viewWidth, availableHeight / viewHeight);
+          // Calculate centering offsets (must match drawCanvas)
+          const scaledWidth = viewWidth * scale;
+          const scaledHeight = viewHeight * scale;
+          const offsetX = padding + (availableWidth - scaledWidth) / 2;
+          const offsetY = padding + (availableHeight - scaledHeight) / 2;
+          const gcodeX = ((mouseX - offsetX) / scale) + viewMinX;
+          const gcodeY = ((mouseY - offsetY) / scale) + viewMinY;
           setClickedPosition({ x: Math.round(gcodeX), y: Math.round(gcodeY) });
         }}
       >

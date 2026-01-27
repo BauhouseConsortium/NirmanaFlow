@@ -349,18 +349,7 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
       </Section>
 
       <Section id="palette" title="Color Palette">
-        <div className="flex items-center justify-between">
-          <label className="text-xs text-slate-400">Multi-Color Mode</label>
-          <input
-            type="checkbox"
-            checked={settings.colorPaletteEnabled}
-            onChange={e => onUpdate('colorPaletteEnabled', e.target.checked)}
-            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-purple-500 focus:ring-purple-500 focus:ring-offset-0"
-          />
-        </div>
-
-        {settings.colorPaletteEnabled && (
-          <div className="mt-3 rounded-lg border border-slate-700/50 overflow-hidden">
+        <div className="rounded-lg border border-slate-700/50 overflow-hidden">
             {colorWells.map((well, index) => (
               <div
                 key={well.id}
@@ -442,7 +431,6 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
               </div>
             ))}
           </div>
-        )}
       </Section>
 
       <Section id="hardware" title="Hardware">

@@ -351,10 +351,14 @@ export default function App() {
 
                   {/* Stats */}
                   {gcodeResult && (
-                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                       <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
                         <div className="text-slate-500">Paths</div>
                         <div className="text-slate-200 font-mono">{gcodeResult.stats.pathCount}</div>
+                      </div>
+                      <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
+                        <div className="text-slate-500">Size</div>
+                        <div className="text-slate-200 font-mono">{gcodeResult.stats.outputWidth.toFixed(1)}×{gcodeResult.stats.outputHeight.toFixed(1)}mm</div>
                       </div>
                       <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
                         <div className="text-slate-500">Draw Dist</div>

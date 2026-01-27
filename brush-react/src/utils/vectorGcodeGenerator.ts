@@ -66,6 +66,8 @@ export interface GeneratedVectorGCode {
     travelDistance: number;
     artefactsRemoved: number;
     dipCount: number;
+    outputWidth: number;
+    outputHeight: number;
   };
 }
 
@@ -266,6 +268,8 @@ export function generateVectorGCode(
         travelDistance: 0,
         artefactsRemoved,
         dipCount: 0,
+        outputWidth: 0,
+        outputHeight: 0,
       },
     };
   }
@@ -423,6 +427,8 @@ export function generateVectorGCode(
       travelDistance,
       artefactsRemoved,
       dipCount,
+      outputWidth,
+      outputHeight,
     },
   };
 }
