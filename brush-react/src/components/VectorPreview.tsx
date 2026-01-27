@@ -560,8 +560,8 @@ function VectorPreviewComponent({
       );
     }
 
-    // Draw ink well and dip markers (when not simulating)
-    if (!simState && parsedGCode.dipPoints.length > 0 && parsedGCode.dipWellPosition) {
+    // Draw ink well and dip markers
+    if (parsedGCode.dipPoints.length > 0 && parsedGCode.dipWellPosition) {
       const { dipWellPosition, dipPoints } = parsedGCode;
       const gcodePaths = parsedGCode.paths;
 
