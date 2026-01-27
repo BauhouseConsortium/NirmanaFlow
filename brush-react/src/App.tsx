@@ -9,6 +9,7 @@ import { Toolbar } from './components/Toolbar';
 import { Console } from './components/Console';
 import { ConnectionIndicator } from './components/ConnectionIndicator';
 import { StreamingProgress } from './components/StreamingProgress';
+import { SplashScreen, useSplashScreen } from './components/SplashScreen';
 import { useVectorSettings, getColorWells, type ColorWell } from './hooks/useVectorSettings';
 import { useConsole } from './hooks/useConsole';
 import { useFluidNC } from './hooks/useFluidNC';
@@ -23,6 +24,7 @@ export default function App() {
   const [placementMode, setPlacementMode] = useState<{ colorIndex: 1 | 2 | 3 | 4; color: string } | null>(null);
 
   const { settings, updateSetting, resetSettings, loadSettings } = useVectorSettings();
+  const { showSplash, dismissSplash, resetSplash } = useSplashScreen();
   const colorWells = useMemo(() => getColorWells(settings), [settings]);
   const { logs, log, clear } = useConsole();
   const lastExecutionRef = useRef<FlowExecutionResult | null>(null);
@@ -270,12 +272,24 @@ export default function App() {
 
   return (
     <div className="h-screen flex flex-col bg-slate-900 text-white overflow-hidden">
+      {/* Splash Screen */}
+      {showSplash && <SplashScreen onDismiss={dismissSplash} />}
+
       {/* Header */}
       <header className="flex-shrink-0 border-b border-slate-700 bg-slate-900 z-10">
         <div className="px-4 py-2 flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-3">
             <h1 className="text-lg font-semibold text-slate-100">Nirmana Flow</h1>
             <span className="text-xs text-slate-500 hidden sm:inline">Visual algorithmic drawing</span>
+            <button
+              onClick={resetSplash}
+              className="p-1 text-slate-500 hover:text-slate-300 transition-colors"
+              title="About"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
           </div>
           <div className="flex items-center gap-3">
             <Toolbar
