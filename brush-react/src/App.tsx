@@ -22,6 +22,8 @@ export default function App() {
   const [gcodeResult, setGcodeResult] = useState<GeneratedVectorGCode | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [placementMode, setPlacementMode] = useState<{ colorIndex: 1 | 2 | 3 | 4; color: string } | null>(null);
+  const [showBottomPane, setShowBottomPane] = useState(true);
+  const [showPreviewPane, setShowPreviewPane] = useState(true);
 
   const { settings, updateSetting, resetSettings, loadSettings } = useVectorSettings();
   const { showSplash, dismissSplash, resetSplash } = useSplashScreen();
@@ -305,6 +307,38 @@ export default function App() {
               isStreaming={fluidNC.isStreaming}
             />
             <div className="h-6 w-px bg-slate-700" />
+            {/* Panel toggles */}
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowPreviewPane(s => !s)}
+                className={`p-1.5 rounded transition-colors ${
+                  showPreviewPane
+                    ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                    : 'text-blue-400 hover:text-blue-300 bg-blue-500/20'
+                }`}
+                title={showPreviewPane ? 'Hide preview panel' : 'Show preview panel'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 4v16" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowBottomPane(s => !s)}
+                className={`p-1.5 rounded transition-colors ${
+                  showBottomPane
+                    ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-700'
+                    : 'text-blue-400 hover:text-blue-300 bg-blue-500/20'
+                }`}
+                title={showBottomPane ? 'Hide settings panel' : 'Show settings panel'}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 5a1 1 0 011-1h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 15h16" />
+                </svg>
+              </button>
+            </div>
+            <div className="h-6 w-px bg-slate-700" />
             <ConnectionIndicator
               connectionState={fluidNC.status.connectionState}
               machineState={fluidNC.status.machineState}
@@ -328,30 +362,33 @@ export default function App() {
           </Allotment.Pane>
 
           {/* Right: Preview + Settings + Console */}
-          <Allotment.Pane minSize={350}>
-            <Allotment vertical>
+          {showPreviewPane && (
+            <Allotment.Pane minSize={350}>
+              <Allotment vertical>
               {/* Preview */}
               <Allotment.Pane minSize={200} preferredSize="55%">
-                <div className="h-full p-3 overflow-auto">
-                  <VectorPreview
-                    paths={paths}
-                    width={settings.canvasWidth}
-                    height={settings.canvasHeight}
-                    gcodeLines={gcodeLines}
-                    showSimulation={true}
-                    machinePosition={fluidNC.status.position}
-                    isConnected={fluidNC.isConnected}
-                    outputSettings={outputSettings}
-                    clipToWorkArea={settings.clipToWorkArea}
-                    placementMode={placementMode}
-                    onPlacementConfirm={handlePlacementConfirm}
-                    onPlacementCancel={handlePlacementCancel}
-                    colorWells={previewColorWells}
-                  />
+                <div className="h-full p-3 flex flex-col">
+                  <div className="flex-1 min-h-0">
+                    <VectorPreview
+                      paths={paths}
+                      width={settings.canvasWidth}
+                      height={settings.canvasHeight}
+                      gcodeLines={gcodeLines}
+                      showSimulation={true}
+                      machinePosition={fluidNC.status.position}
+                      isConnected={fluidNC.isConnected}
+                      outputSettings={outputSettings}
+                      clipToWorkArea={settings.clipToWorkArea}
+                      placementMode={placementMode}
+                      onPlacementConfirm={handlePlacementConfirm}
+                      onPlacementCancel={handlePlacementCancel}
+                      colorWells={previewColorWells}
+                    />
+                  </div>
 
                   {/* Stats */}
                   {gcodeResult && (
-                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                    <div className="flex-shrink-0 mt-3 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
                       <div className="bg-slate-800/50 rounded-lg p-2 border border-slate-700">
                         <div className="text-slate-500">Paths</div>
                         <div className="text-slate-200 font-mono">{gcodeResult.stats.pathCount}</div>
@@ -377,7 +414,7 @@ export default function App() {
 
                   {/* Streaming Progress */}
                   {fluidNC.streaming.state !== 'idle' && (
-                    <div className="mt-3">
+                    <div className="flex-shrink-0 mt-3">
                       <StreamingProgress
                         streaming={fluidNC.streaming}
                         onPause={handlePauseStreaming}
@@ -390,32 +427,35 @@ export default function App() {
               </Allotment.Pane>
 
               {/* Settings + Console */}
-              <Allotment.Pane minSize={150}>
-                <Allotment>
-                  <Allotment.Pane minSize={200} preferredSize="50%">
-                    <div className="h-full p-3 overflow-auto">
-                      <VectorSettingsPanel
-                        settings={settings}
-                        onUpdate={updateSetting}
-                        onReset={resetSettings}
-                        onLoad={loadSettings}
-                        onSetColorWellPosition={handleSetColorWellPosition}
-                        onJogToPosition={fluidNC.goToXY}
-                        isConnected={fluidNC.isConnected}
-                      />
-                    </div>
-                  </Allotment.Pane>
-                  <Allotment.Pane minSize={200}>
-                    <div className="h-full p-3">
-                      <div className="h-full bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
-                        <Console logs={logs} onClear={clear} />
+              {showBottomPane && (
+                <Allotment.Pane minSize={150}>
+                  <Allotment>
+                    <Allotment.Pane minSize={200} preferredSize="50%">
+                      <div className="h-full p-3 overflow-auto">
+                        <VectorSettingsPanel
+                          settings={settings}
+                          onUpdate={updateSetting}
+                          onReset={resetSettings}
+                          onLoad={loadSettings}
+                          onSetColorWellPosition={handleSetColorWellPosition}
+                          onJogToPosition={fluidNC.goToXY}
+                          isConnected={fluidNC.isConnected}
+                        />
                       </div>
-                    </div>
-                  </Allotment.Pane>
-                </Allotment>
-              </Allotment.Pane>
+                    </Allotment.Pane>
+                    <Allotment.Pane minSize={200}>
+                      <div className="h-full p-3">
+                        <div className="h-full bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
+                          <Console logs={logs} onClear={clear} />
+                        </div>
+                      </div>
+                    </Allotment.Pane>
+                  </Allotment>
+                </Allotment.Pane>
+              )}
             </Allotment>
           </Allotment.Pane>
+          )}
         </Allotment>
       </main>
     </div>

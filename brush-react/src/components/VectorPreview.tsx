@@ -248,6 +248,13 @@ function VectorPreviewComponent({
   const [simulationProgress, setSimulationProgress] = useState(0);
   const [simulationSpeed, setSimulationSpeed] = useState(5);
   const [currentInfo, setCurrentInfo] = useState('');
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [showWorkArea, setShowWorkArea] = useState(true);
+  const [showInkDips, setShowInkDips] = useState(true);
+  const [panMode, setPanMode] = useState(false);
+  const isPanningRef = useRef(false);
+  const lastPanPosRef = useRef({ x: 0, y: 0 });
 
   // Memoize parsed G-code moves to avoid re-parsing on every render
   const parsedGCode = useMemo((): ParsedGCode => {
@@ -282,7 +289,8 @@ function VectorPreviewComponent({
           if (containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
             const w = Math.floor(rect.width) || 400;
-            const h = Math.floor(Math.max(Math.min(w * (height / width), 400), 200));
+            // Use container height directly - the flex layout should give us proper height
+            const h = Math.floor(rect.height) || Math.max(Math.floor(w * (height / width)), 200);
 
             // Only update if dimensions changed by more than 2px (prevents resize loops)
             const lastW = lastDimensionsRef.current.width;
@@ -390,13 +398,14 @@ function VectorPreviewComponent({
     const availableHeight = ch - padding * 2;
     const scaleX = availableWidth / viewWidth;
     const scaleY = availableHeight / viewHeight;
-    const scale = Math.min(scaleX, scaleY);
+    const baseScale = Math.min(scaleX, scaleY);
+    const scale = baseScale * zoomLevel;
 
-    // Calculate centering offsets
+    // Calculate centering offsets (with pan)
     const scaledWidth = viewWidth * scale;
     const scaledHeight = viewHeight * scale;
-    const offsetX = padding + (availableWidth - scaledWidth) / 2;
-    const offsetY = padding + (availableHeight - scaledHeight) / 2;
+    const offsetX = padding + (availableWidth - scaledWidth) / 2 + panOffset.x;
+    const offsetY = padding + (availableHeight - scaledHeight) / 2 + panOffset.y;
 
     // Helper to convert coordinates to screen space
     const toScreen = (x: number, y: number): [number, number] => {
@@ -434,22 +443,24 @@ function VectorPreviewComponent({
       const [waX1, waY1] = toScreen(offsetX, offsetY);
       const [waX2, waY2] = toScreen(offsetX + targetWidth, offsetY + targetHeight);
 
-      // Ensure clean state before drawing border
-      ctx.setLineDash([6, 4]);
-      ctx.strokeStyle = '#3b82f6';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.rect(waX1, waY1, waX2 - waX1, waY2 - waY1);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Draw border if enabled
+      if (showWorkArea) {
+        ctx.setLineDash([6, 4]);
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.rect(waX1, waY1, waX2 - waX1, waY2 - waY1);
+        ctx.stroke();
+        ctx.setLineDash([]);
 
-      // Work area label
-      ctx.fillStyle = '#3b82f6';
-      ctx.font = '10px system-ui';
-      ctx.textAlign = 'left';
-      ctx.fillText(`${targetWidth}×${targetHeight}mm`, waX1 + 4, waY1 - 4);
+        // Work area label
+        ctx.fillStyle = '#3b82f6';
+        ctx.font = '10px system-ui';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${targetWidth}×${targetHeight}mm`, waX1 + 4, waY1 - 4);
+      }
 
-      // Apply canvas clipping if enabled
+      // Apply canvas clipping if enabled (independent of border visibility)
       if (clipToWorkArea) {
         ctx.save();
         ctx.beginPath();
@@ -618,7 +629,7 @@ function VectorPreviewComponent({
     }
 
     // Draw ink well and dip markers
-    if (parsedGCode.dipPoints.length > 0 && parsedGCode.dipWellPosition) {
+    if (showInkDips && parsedGCode.dipPoints.length > 0 && parsedGCode.dipWellPosition) {
       const { dipWellPosition, dipPoints } = parsedGCode;
       const gcodePaths = parsedGCode.paths;
 
@@ -681,7 +692,7 @@ function VectorPreviewComponent({
     }
 
     // Draw color wells (when multi-color mode is enabled)
-    if (colorWells.length > 0) {
+    if (showInkDips && colorWells.length > 0) {
       for (const well of colorWells) {
         const [wx, wy] = toScreen(well.x, well.y);
 
@@ -758,7 +769,7 @@ function VectorPreviewComponent({
       ctx.textAlign = 'left';
       ctx.fillText(statsText, 8, ch - 10);
     }
-  }, [paths, dimensions, width, height, isConnected, machinePosition, parsedGCode, colorWells, placementMode, clickedPosition, hoverPosition, outputSettings, clipToWorkArea]);
+  }, [paths, dimensions, width, height, isConnected, machinePosition, parsedGCode, colorWells, placementMode, clickedPosition, hoverPosition, outputSettings, clipToWorkArea, zoomLevel, panOffset, showWorkArea, showInkDips]);
 
   // Store drawCanvas in a ref to avoid dependency loops
   const drawCanvasRef = useRef(drawCanvas);
@@ -788,6 +799,13 @@ function VectorPreviewComponent({
       scheduleRedraw();
     }
   }, [placementMode, colorWells, clickedPosition, hoverPosition, isSimulating, scheduleRedraw]);
+
+  // Redraw when zoom, pan, or display settings change
+  useEffect(() => {
+    if (!isSimulating) {
+      scheduleRedraw();
+    }
+  }, [zoomLevel, panOffset, showWorkArea, showInkDips, isSimulating, scheduleRedraw]);
 
   // Redraw when machine position updates (for realtime indicator)
   useEffect(() => {
@@ -872,8 +890,8 @@ function VectorPreviewComponent({
   }, [isSimulating, parsedGCode, simulationSpeed, scheduleRedraw]);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between flex-wrap gap-2">
+    <div className="h-full flex flex-col gap-2">
+      <div className="flex-shrink-0 flex items-center justify-between flex-wrap gap-2">
         <h3 className="text-sm font-medium text-slate-300">Preview</h3>
         <div className="flex items-center gap-2 text-xs">
           {showSimulation && gcodeLines.length > 0 && (
@@ -918,7 +936,7 @@ function VectorPreviewComponent({
       </div>
 
       {isSimulating && (
-        <div className="space-y-1">
+        <div className="flex-shrink-0 space-y-1">
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400 font-mono">{currentInfo}</span>
             <span className="text-slate-500">{simulationProgress.toFixed(0)}%</span>
@@ -934,10 +952,41 @@ function VectorPreviewComponent({
 
       <div
         ref={containerRef}
-        className={`bg-white rounded-lg overflow-hidden border min-h-[200px] relative ${
-          placementMode ? 'border-purple-500 border-2 cursor-crosshair' : 'border-slate-600'
+        className={`flex-1 min-h-0 bg-white rounded-lg overflow-hidden border relative ${
+          placementMode ? 'border-purple-500 border-2 cursor-crosshair' :
+          panMode ? 'border-slate-600 cursor-grab active:cursor-grabbing' : 'border-slate-600'
         }`}
+        onWheel={(e) => {
+          if (placementMode) return;
+          e.preventDefault();
+          const delta = e.deltaY > 0 ? 0.9 : 1.1;
+          setZoomLevel(z => Math.max(0.25, Math.min(10, z * delta)));
+        }}
+        onMouseDown={(e) => {
+          // Middle mouse button, alt+left click, or pan mode left click for panning
+          if (placementMode) return;
+          if (e.button === 1 || (e.button === 0 && e.altKey) || (e.button === 0 && panMode)) {
+            e.preventDefault();
+            isPanningRef.current = true;
+            lastPanPosRef.current = { x: e.clientX, y: e.clientY };
+          }
+        }}
+        onMouseUp={() => {
+          isPanningRef.current = false;
+        }}
+        onMouseLeave={() => {
+          isPanningRef.current = false;
+        }}
         onMouseMove={(e) => {
+          // Handle panning
+          if (isPanningRef.current) {
+            const dx = e.clientX - lastPanPosRef.current.x;
+            const dy = e.clientY - lastPanPosRef.current.y;
+            setPanOffset(p => ({ x: p.x + dx, y: p.y + dy }));
+            lastPanPosRef.current = { x: e.clientX, y: e.clientY };
+            return;
+          }
+          // Original placement mode logic
           if (!placementMode || !canvasRef.current || !outputSettings) return;
           const rect = canvasRef.current.getBoundingClientRect();
           const mouseX = e.clientX - rect.left;
@@ -977,17 +1026,21 @@ function VectorPreviewComponent({
           const viewHeight = viewMaxY - viewMinY;
           const availableWidth = cw - padding * 2;
           const availableHeight = ch - padding * 2;
-          const scale = Math.min(availableWidth / viewWidth, availableHeight / viewHeight);
-          // Calculate centering offsets (must match drawCanvas)
+          const baseScale = Math.min(availableWidth / viewWidth, availableHeight / viewHeight);
+          const scale = baseScale * zoomLevel;
+          // Calculate centering offsets (must match drawCanvas with zoom/pan)
           const scaledWidth = viewWidth * scale;
           const scaledHeight = viewHeight * scale;
-          const offsetX = padding + (availableWidth - scaledWidth) / 2;
-          const offsetY = padding + (availableHeight - scaledHeight) / 2;
+          const offsetX = padding + (availableWidth - scaledWidth) / 2 + panOffset.x;
+          const offsetY = padding + (availableHeight - scaledHeight) / 2 + panOffset.y;
           const gcodeX = ((mouseX - offsetX) / scale) + viewMinX;
           const gcodeY = ((mouseY - offsetY) / scale) + viewMinY;
           setHoverPosition({ x: Math.round(gcodeX), y: Math.round(gcodeY) });
         }}
-        onMouseLeave={() => setHoverPosition(null)}
+        onMouseLeave={() => {
+          setHoverPosition(null);
+          isPanningRef.current = false;
+        }}
         onClick={(e) => {
           if (!placementMode || !canvasRef.current || !outputSettings) return;
           const rect = canvasRef.current.getBoundingClientRect();
@@ -1028,12 +1081,13 @@ function VectorPreviewComponent({
           const viewHeight = viewMaxY - viewMinY;
           const availableWidth = cw - padding * 2;
           const availableHeight = ch - padding * 2;
-          const scale = Math.min(availableWidth / viewWidth, availableHeight / viewHeight);
-          // Calculate centering offsets (must match drawCanvas)
+          const baseScale = Math.min(availableWidth / viewWidth, availableHeight / viewHeight);
+          const scale = baseScale * zoomLevel;
+          // Calculate centering offsets (must match drawCanvas with zoom/pan)
           const scaledWidth = viewWidth * scale;
           const scaledHeight = viewHeight * scale;
-          const offsetX = padding + (availableWidth - scaledWidth) / 2;
-          const offsetY = padding + (availableHeight - scaledHeight) / 2;
+          const offsetX = padding + (availableWidth - scaledWidth) / 2 + panOffset.x;
+          const offsetY = padding + (availableHeight - scaledHeight) / 2 + panOffset.y;
           const gcodeX = ((mouseX - offsetX) / scale) + viewMinX;
           const gcodeY = ((mouseY - offsetY) / scale) + viewMinY;
           setClickedPosition({ x: Math.round(gcodeX), y: Math.round(gcodeY) });
@@ -1109,6 +1163,96 @@ function VectorPreviewComponent({
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Controls overlay */}
+        {!placementMode && (
+          <div className="absolute bottom-2 right-2 pointer-events-auto">
+            <div className="flex items-end gap-1.5 bg-slate-900/80 backdrop-blur-sm rounded-lg p-1.5 border border-slate-700/50">
+              {/* View toggles group */}
+              <div className="flex gap-0.5">
+                <button
+                  onClick={() => setShowInkDips(s => !s)}
+                  className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
+                    showInkDips
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-700/50 text-slate-500 hover:text-slate-300 hover:bg-slate-700'
+                  }`}
+                  title={showInkDips ? 'Hide ink wells' : 'Show ink wells'}
+                >
+                  <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 2c-5.33 8.33-8 12.67-8 16a8 8 0 1 0 16 0c0-3.33-2.67-7.67-8-16z" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setShowWorkArea(s => !s)}
+                  className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
+                    showWorkArea
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-slate-700/50 text-slate-500 hover:text-slate-300 hover:bg-slate-700'
+                  }`}
+                  title={showWorkArea ? 'Hide work area' : 'Show work area'}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2" strokeDasharray="4 2" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Divider */}
+              <div className="w-px h-6 bg-slate-600/50" />
+
+              {/* Pan toggle */}
+              <button
+                onClick={() => setPanMode(p => !p)}
+                className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
+                  panMode
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-slate-700/50 text-slate-500 hover:text-slate-300 hover:bg-slate-700'
+                }`}
+                title={panMode ? 'Exit pan mode' : 'Pan mode (drag to pan)'}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+                </svg>
+              </button>
+
+              {/* Divider */}
+              <div className="w-px h-6 bg-slate-600/50" />
+
+              {/* Zoom controls */}
+              <div className="flex items-center gap-0.5">
+                <button
+                  onClick={() => setZoomLevel(z => Math.max(z / 1.25, 0.25))}
+                  className="w-7 h-7 bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded flex items-center justify-center transition-colors"
+                  title="Zoom out"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => {
+                    setZoomLevel(1);
+                    setPanOffset({ x: 0, y: 0 });
+                  }}
+                  className="min-w-[42px] h-7 px-1.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded flex items-center justify-center text-xs font-medium tabular-nums transition-colors"
+                  title="Reset view"
+                >
+                  {Math.round(zoomLevel * 100)}%
+                </button>
+                <button
+                  onClick={() => setZoomLevel(z => Math.min(z * 1.25, 10))}
+                  className="w-7 h-7 bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-slate-200 rounded flex items-center justify-center transition-colors"
+                  title="Zoom in"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>
