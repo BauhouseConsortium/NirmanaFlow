@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, ChangeEvent } from '
 import {
   ReactFlow,
   Controls,
+  ControlButton,
   Background,
   BackgroundVariant,
   useNodesState,
@@ -76,6 +77,8 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNodes, setSelectedNodes] = useState<string[]>([]);
+  const [isPanMode, setIsPanMode] = useState(false);
+  const [isSpacePressed, setIsSpacePressed] = useState(false);
   const [glyphEditorOpen, setGlyphEditorOpen] = useState(false);
   const [glyphEditorText, setGlyphEditorText] = useState('');
   const [codeEditorOpen, setCodeEditorOpen] = useState(false);
@@ -292,20 +295,38 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
     return () => window.removeEventListener('deleteEdge', handleDeleteEdge);
   }, [setEdges]);
 
+  // Handle Space key for temporary pan mode
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code === 'Space' && !event.repeat &&
+          !(event.target instanceof HTMLInputElement) &&
+          !(event.target instanceof HTMLTextAreaElement)) {
+        event.preventDefault();
+        setIsSpacePressed(true);
+      }
+    };
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code === 'Space') {
+        setIsSpacePressed(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Determine if panning is active (either mode or space held)
+  const isPanning = isPanMode || isSpacePressed;
+
   // Execute flow when nodes or edges change (with persistent cache)
   useEffect(() => {
     const result = executeFlow(nodes, edges, executionCacheRef.current);
     onChange?.(result.paths, result);
-
-    // Log cache stats in development
-    if (import.meta.env.DEV && result.cacheStats) {
-      const { hits, misses, hitRate, size } = result.cacheStats;
-      if (hits + misses > 0) {
-        console.debug(
-          `[FlowCache] hits: ${hits}, misses: ${misses}, rate: ${(hitRate * 100).toFixed(1)}%, size: ${size}`
-        );
-      }
-    }
   }, [nodes, edges, onChange]);
 
   // Listen for glyph editor open event
@@ -429,7 +450,7 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
   const canCreateGroup = selectedNodes.length >= 2;
 
   return (
-    <div className="h-full w-full relative">
+    <div className={`h-full w-full relative ${isPanning ? 'cursor-grab active:cursor-grabbing' : ''}`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -443,9 +464,9 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         fitViewOptions={{ padding: 0.2, maxZoom: 1 }}
         style={flowStyles}
         deleteKeyCode={['Backspace', 'Delete']}
-        selectionOnDrag
+        selectionOnDrag={!isPanning}
         selectionMode={SelectionMode.Partial}
-        panOnDrag={[1, 2]} // Middle and right mouse button to pan
+        panOnDrag={isPanning ? [0, 1, 2] : [1, 2]} // Left click pans when in pan mode
         defaultEdgeOptions={{
           style: { stroke: '#64748b', strokeWidth: 2 },
           type: 'custom',
@@ -463,13 +484,30 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         edgesFocusable={false}
       >
         <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="#334155" />
-        <Controls className="!bg-slate-800 !border-slate-700 !shadow-lg [&>button]:!bg-slate-700 [&>button]:!border-slate-600 [&>button]:!text-slate-300 [&>button:hover]:!bg-slate-600" />
+        <Controls className="!bg-slate-800 !border-slate-700 !shadow-lg [&>button]:!bg-slate-700 [&>button]:!border-slate-600 [&>button]:!text-slate-300 [&>button:hover]:!bg-slate-600">
+          <ControlButton
+            onClick={() => setIsPanMode(!isPanMode)}
+            title="Pan mode (hold Space for temporary)"
+            className={isPanMode ? '!bg-blue-600 !text-white' : ''}
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+            </svg>
+          </ControlButton>
+        </Controls>
       </ReactFlow>
 
       {/* Node Palette */}
       <div className="absolute top-4 left-4 z-10">
         <NodePalette onAddNode={handleAddNode} />
       </div>
+
+      {/* Pan mode indicator */}
+      {isSpacePressed && !isPanMode && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg shadow-lg">
+          Pan Mode (release Space to exit)
+        </div>
+      )}
 
       {/* Group Actions Toolbar */}
       {canCreateGroup && (

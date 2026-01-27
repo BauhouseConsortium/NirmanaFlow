@@ -1011,10 +1011,8 @@ export const VectorPreview = memo(VectorPreviewComponent, (prev, next) => {
   if (prev.showSimulation !== next.showSimulation) return false;
   if (prev.isConnected !== next.isConnected) return false;
 
-  // Compare paths by reference first, then by length
-  if (prev.paths !== next.paths) {
-    if (prev.paths.length !== next.paths.length) return false;
-  }
+  // Compare paths - always re-render if reference changed (paths content may differ)
+  if (prev.paths !== next.paths) return false;
 
   // Compare gcodeLines by reference
   if (prev.gcodeLines !== next.gcodeLines) {
