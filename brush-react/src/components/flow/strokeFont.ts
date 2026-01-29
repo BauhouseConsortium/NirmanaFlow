@@ -290,6 +290,7 @@ export interface TextRenderOptions {
 
 /**
  * Render text as vector paths
+ * Characters are rendered directly - preview Y-flip handles coordinate inversion
  */
 export function renderText(text: string, options: TextRenderOptions): Point[][] {
   const { x, y, size, spacing = 1.2, lineHeight = 1.5 } = options;
@@ -314,7 +315,8 @@ export function renderText(text: string, options: TextRenderOptions): Point[][] 
       for (const stroke of charDef) {
         const transformedPath: Point[] = stroke.map(([px, py]) => [
           cursorX + px * size,
-          cursorY + py * charHeight,
+          // Flip Y within character so text reads correctly after preview Y-flip
+          cursorY + (1 - py) * charHeight,
         ]);
         if (transformedPath.length > 1) {
           paths.push(transformedPath);

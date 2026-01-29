@@ -298,6 +298,7 @@ export function generateVectorGCode(
   const outputHeight = (maxY - minY) * scale;
 
   // Transform function: canvas coords (0,0)-(canvasW,canvasH) → output coords
+  // Direct mapping without mirroring - preview matches print output
   const transform = (p: Point): Point => {
     const x = p[0] * scale + offsetX + centerOffsetX;
     const y = p[1] * scale + offsetY + centerOffsetY;

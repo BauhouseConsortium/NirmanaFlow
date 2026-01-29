@@ -84,7 +84,7 @@ interface ParsedGCode {
   dipWellPosition: { x: number; y: number } | null;
 }
 
-function parseGCodeToMoves(lines: string[]): ParsedGCode {
+function parseGCodeToMoves(lines: string[], mirrorAxes?: { x: number; y: number }): ParsedGCode {
   const moves: GCodeMove[] = [];
   const paths: GCodePath[] = [];
   const dipPoints: DipPoint[] = [];
@@ -96,6 +96,16 @@ function parseGCodeToMoves(lines: string[]): ParsedGCode {
   let penDown = false;
   let nextIsDip = false;
   let dipWellPosition: { x: number; y: number } | null = null;
+
+  // Helper to un-mirror coordinates for display (G-code is rotated 180° for print)
+  const unmirrorX = (gx: number): number => {
+    if (mirrorAxes === undefined) return gx;
+    return mirrorAxes.x - gx;
+  };
+  const unmirrorY = (gy: number): number => {
+    if (mirrorAxes === undefined) return gy;
+    return mirrorAxes.y - gy;
+  };
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 
@@ -146,10 +156,10 @@ function parseGCodeToMoves(lines: string[]): ParsedGCode {
 
     // Capture dip position (G0 after dip comment)
     if (nextIsDip && isG0 && xMatch && yMatch) {
-      dipWellPosition = { x, y };
+      dipWellPosition = { x: unmirrorX(x), y: unmirrorY(y) };
       dipPoints.push({
-        x,
-        y,
+        x: unmirrorX(x),
+        y: unmirrorY(y),
         afterPathIndex: paths.length - 1, // Dip occurs after current path count
       });
       nextIsDip = false;
@@ -164,8 +174,8 @@ function parseGCodeToMoves(lines: string[]): ParsedGCode {
 
     moves.push({
       type: isG0 ? 'G0' : 'G1',
-      fromX: prevX, fromY: prevY, fromZ: prevZ,
-      toX: x, toY: y, toZ: z,
+      fromX: unmirrorX(prevX), fromY: unmirrorY(prevY), fromZ: prevZ,
+      toX: unmirrorX(x), toY: unmirrorY(y), toZ: z,
       feedRate: speed,
       duration,
       startTime: cumulativeTime,
@@ -178,21 +188,25 @@ function parseGCodeToMoves(lines: string[]): ParsedGCode {
     penDown = z <= 0.1;
 
     if (penDown) {
+      // Un-mirror X and Y for display
+      const displayX = unmirrorX(x);
+      const displayY = unmirrorY(y);
+
       // Update bounds only for drawing positions
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
+      minX = Math.min(minX, displayX);
+      minY = Math.min(minY, displayY);
+      maxX = Math.max(maxX, displayX);
+      maxY = Math.max(maxY, displayY);
 
       if (!wasPenDown) {
         // Pen just went down - start new path
         if (currentPath.length > 1) {
           paths.push({ points: currentPath });
         }
-        currentPath = [[x, y]];
+        currentPath = [[displayX, displayY]];
       } else if (isG1) {
         // Continue drawing
-        currentPath.push([x, y]);
+        currentPath.push([displayX, displayY]);
       }
     } else if (wasPenDown) {
       // Pen just lifted - end current path
@@ -268,8 +282,9 @@ function VectorPreviewComponent({
         dipWellPosition: null,
       };
     }
+    // Parse G-code without un-mirroring - coordinates are direct mapping now
     return parseGCodeToMoves(gcodeLines);
-  }, [gcodeLines, width, height]);
+  }, [gcodeLines, width, height, outputSettings]);
 
   // Track last dimensions to avoid unnecessary updates
   const lastDimensionsRef = useRef({ width: 0, height: 0 });
@@ -408,12 +423,16 @@ function VectorPreviewComponent({
     const offsetY = padding + (availableHeight - scaledHeight) / 2 + panOffset.y;
 
     // Helper to convert coordinates to screen space
+    // Y is flipped so that Y=0 is at bottom (standard math coordinates)
     const toScreen = (x: number, y: number): [number, number] => {
       return [
         offsetX + (x - viewMinX) * scale,
-        offsetY + (y - viewMinY) * scale
+        offsetY + (viewMaxY - y) * scale
       ];
     };
+
+    // Color wells use raw machine coordinates - no un-mirroring needed
+    // toScreen already handles Y flip for proper display
 
     // Grid (in view coordinates)
     ctx.strokeStyle = '#e2e8f0';
@@ -692,6 +711,7 @@ function VectorPreviewComponent({
     }
 
     // Draw color wells (when multi-color mode is enabled)
+    // Use raw machine coordinates - toScreen handles Y flip
     if (showInkDips && colorWells.length > 0) {
       for (const well of colorWells) {
         const [wx, wy] = toScreen(well.x, well.y);
@@ -974,9 +994,6 @@ function VectorPreviewComponent({
         onMouseUp={() => {
           isPanningRef.current = false;
         }}
-        onMouseLeave={() => {
-          isPanningRef.current = false;
-        }}
         onMouseMove={(e) => {
           // Handle panning
           if (isPanningRef.current) {
@@ -1034,7 +1051,7 @@ function VectorPreviewComponent({
           const offsetX = padding + (availableWidth - scaledWidth) / 2 + panOffset.x;
           const offsetY = padding + (availableHeight - scaledHeight) / 2 + panOffset.y;
           const gcodeX = ((mouseX - offsetX) / scale) + viewMinX;
-          const gcodeY = ((mouseY - offsetY) / scale) + viewMinY;
+          const gcodeY = viewMaxY - ((mouseY - offsetY) / scale);
           setHoverPosition({ x: Math.round(gcodeX), y: Math.round(gcodeY) });
         }}
         onMouseLeave={() => {
@@ -1089,7 +1106,7 @@ function VectorPreviewComponent({
           const offsetX = padding + (availableWidth - scaledWidth) / 2 + panOffset.x;
           const offsetY = padding + (availableHeight - scaledHeight) / 2 + panOffset.y;
           const gcodeX = ((mouseX - offsetX) / scale) + viewMinX;
-          const gcodeY = ((mouseY - offsetY) / scale) + viewMinY;
+          const gcodeY = viewMaxY - ((mouseY - offsetY) / scale);
           setClickedPosition({ x: Math.round(gcodeX), y: Math.round(gcodeY) });
         }}
       >
