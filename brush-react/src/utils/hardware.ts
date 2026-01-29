@@ -15,7 +15,7 @@ async function sendCommand(baseUrl: string, command: string): Promise<HardwareRe
 
   try {
     // Use no-cors directly like reference - avoids double-send issue
-    const response = await fetch(cmdUrl, { method: 'GET', mode: 'no-cors' });
+    await fetch(cmdUrl, { method: 'GET', mode: 'no-cors' });
 
     // In no-cors mode, response is opaque but request was sent
     const cleanCmd = command.length > 20 ? command.substring(0, 20) + '...' : command;

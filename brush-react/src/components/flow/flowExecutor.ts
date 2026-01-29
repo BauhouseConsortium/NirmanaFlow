@@ -228,8 +228,9 @@ function parseNodeData<T extends NodeType>(
  * Get node data with fallback to defaults
  * Uses Zod schema defaults for missing fields
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function getNodeDataSafe<T extends NodeType>(
-  nodeType: T,
+  _nodeType: T,
   data: Record<string, unknown>,
   defaults: Partial<Record<string, unknown>>
 ): Record<string, unknown> {
@@ -389,6 +390,38 @@ function toPlainPaths(coloredPaths: ColoredPath[]): Path[] {
 // Helper: Convert Path[] to ColoredPath[] with optional color
 function toColoredPaths(paths: Path[], color?: 1 | 2 | 3 | 4): ColoredPath[] {
   return paths.map(points => ({ points, color }));
+}
+
+// Transform plain paths (for code API)
+function transformPlainPaths(
+  paths: Path[],
+  tx: number,
+  ty: number,
+  rotation = 0,
+  scale = 1,
+  cx = 0,
+  cy = 0
+): Path[] {
+  return paths.map((path) =>
+    path.map((point) => transformPoint(point, tx, ty, rotation, scale, cx, cy))
+  );
+}
+
+// Calculate centroid of plain paths (for code API)
+function getPlainPathsCentroid(paths: Path[]): Point {
+  let sumX = 0;
+  let sumY = 0;
+  let count = 0;
+
+  for (const path of paths) {
+    for (const point of path) {
+      sumX += point[0];
+      sumY += point[1];
+      count++;
+    }
+  }
+
+  return count > 0 ? [sumX / count, sumY / count] : [0, 0];
 }
 
 // Calculate centroid of colored paths
@@ -822,9 +855,10 @@ function applyPathLayout(node: Node, inputPaths: ColoredPath[]): ColoredPath[] {
       const { x: pathX, y: pathY, angle } = getPointOnPath(pathType, pathT, params);
 
       // Offset from text baseline (perpendicular to path)
+      // Use + PI/2 instead of - PI/2 to compensate for preview Y-flip
       const offsetY = py - textCenterY;
       const angleRad = ((reverse ? angle + 180 : angle) * Math.PI) / 180;
-      const perpAngle = angleRad - Math.PI / 2;
+      const perpAngle = angleRad + Math.PI / 2;
 
       // Transform point
       const newX = pathX + Math.cos(perpAngle) * offsetY;
@@ -1140,15 +1174,15 @@ function createCodeApi() {
       cx = 0,
       cy = 0
     ): Path[] => {
-      return transformPaths(paths, tx, ty, rotation, scale, cx, cy);
+      return transformPlainPaths(paths, tx, ty, rotation, scale, cx, cy);
     },
 
     translate: (paths: Path[], dx: number, dy: number): Path[] => {
-      return transformPaths(paths, dx, dy, 0, 1, 0, 0);
+      return transformPlainPaths(paths, dx, dy, 0, 1, 0, 0);
     },
 
     rotate: (paths: Path[], angle: number, cx = 0, cy = 0): Path[] => {
-      return transformPaths(paths, 0, 0, angle, 1, cx, cy);
+      return transformPlainPaths(paths, 0, 0, angle, 1, cx, cy);
     },
 
     scale: (paths: Path[], sx: number, sy?: number, cx = 0, cy = 0): Path[] => {
@@ -1163,7 +1197,7 @@ function createCodeApi() {
     },
 
     centroid: (paths: Path[]): Point => {
-      return getPathsCentroid(paths);
+      return getPlainPathsCentroid(paths);
     },
 
     bounds: (paths: Path[]): { minX: number; minY: number; maxX: number; maxY: number } => {

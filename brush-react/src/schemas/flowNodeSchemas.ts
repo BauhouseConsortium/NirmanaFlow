@@ -287,7 +287,7 @@ export function validateNodeData<T extends NodeType>(
 
   const result = schema.safeParse(data);
   if (result.success) {
-    return { success: true, data: result.data };
+    return { success: true, data: result.data as z.infer<(typeof nodeSchemaMap)[T]> };
   }
   return { success: false, errors: result.error };
 }
@@ -303,7 +303,7 @@ export function parseNodeDataWithDefaults<T extends NodeType>(
   if (!schema) return null;
 
   try {
-    return schema.parse(data);
+    return schema.parse(data) as z.infer<(typeof nodeSchemaMap)[T]>;
   } catch {
     return null;
   }
@@ -324,7 +324,7 @@ export function getSafeNodeValue<T extends NodeType, K extends keyof z.infer<(ty
   const fieldSchema = (schema.shape as Record<string, z.ZodTypeAny>)[field as string];
   const result = fieldSchema.safeParse(value);
 
-  return result.success ? result.data : defaultValue;
+  return (result.success ? result.data : defaultValue) as z.infer<(typeof nodeSchemaMap)[T]>[K];
 }
 
 /**
@@ -332,7 +332,7 @@ export function getSafeNodeValue<T extends NodeType, K extends keyof z.infer<(ty
  */
 export function getValidationErrorMap(error: z.ZodError): Record<string, string> {
   const errorMap: Record<string, string> = {};
-  for (const issue of error.errors) {
+  for (const issue of error.issues) {
     const path = issue.path.join('.');
     errorMap[path] = issue.message;
   }

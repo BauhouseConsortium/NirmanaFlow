@@ -164,7 +164,7 @@ export function useVectorSettings() {
         return rest;
       });
     } else if (result.errors) {
-      const errorMessage = result.errors.errors[0]?.message || 'Invalid value';
+      const errorMessage = result.errors.issues[0]?.message || 'Invalid value';
       setValidationErrors(prev => ({ ...prev, [key]: errorMessage }));
     }
   }, []);

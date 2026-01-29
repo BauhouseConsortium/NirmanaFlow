@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, type ReactElement } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
 interface ShapeNodeData extends Record<string, unknown> {
@@ -80,7 +80,7 @@ function ShapeNodeComponent({ data, id }: ShapeNodeProps) {
 
   // Render fields based on what data is present
   const renderFields = () => {
-    const fields: JSX.Element[] = [];
+    const fields: ReactElement[] = [];
 
     if ('x1' in nodeData) {
       fields.push(

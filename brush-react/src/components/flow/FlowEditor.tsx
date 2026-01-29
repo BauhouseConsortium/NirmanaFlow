@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import {
   ReactFlow,
   Controls,
@@ -172,7 +172,8 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
     setSelectedNodes([]);
   }, [selectedNodes, nodes, setNodes]);
 
-  // Ungroup nodes
+  // Ungroup nodes (available for future use)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const handleUngroup = useCallback((groupId: string) => {
     const groupNode = nodes.find((n) => n.id === groupId);
     if (!groupNode) return;

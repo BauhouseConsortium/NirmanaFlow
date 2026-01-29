@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, type ReactElement } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
 interface IterationNodeData extends Record<string, unknown> {
@@ -58,7 +58,7 @@ function IterationNodeComponent({ data, id }: IterationNodeProps) {
   const { icon, color } = getNodeStyle();
 
   const renderFields = () => {
-    const fields: JSX.Element[] = [];
+    const fields: ReactElement[] = [];
 
     if ('count' in nodeData && 'offsetX' in nodeData) {
       // Repeat node

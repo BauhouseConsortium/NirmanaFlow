@@ -11,7 +11,7 @@ import { ConnectionIndicator } from './components/ConnectionIndicator';
 import { StreamingProgress } from './components/StreamingProgress';
 import { SplashScreen, useSplashScreen } from './components/SplashScreen';
 import { JogControlModal } from './components/JogControlModal';
-import { useVectorSettings, getColorWells, type ColorWell } from './hooks/useVectorSettings';
+import { useVectorSettings, getColorWells, type VectorSettings } from './hooks/useVectorSettings';
 import { useConsole } from './hooks/useConsole';
 import { useFluidNC } from './hooks/useFluidNC';
 import type { ColoredPath } from './utils/drawingApi';

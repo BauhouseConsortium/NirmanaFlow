@@ -3,6 +3,7 @@ import {
   BaseEdge,
   EdgeLabelRenderer,
   getSmoothStepPath,
+  Position,
 } from '@xyflow/react';
 
 interface CustomEdgeProps {
@@ -11,8 +12,8 @@ interface CustomEdgeProps {
   sourceY: number;
   targetX: number;
   targetY: number;
-  sourcePosition: 'top' | 'bottom' | 'left' | 'right';
-  targetPosition: 'top' | 'bottom' | 'left' | 'right';
+  sourcePosition: Position;
+  targetPosition: Position;
   selected?: boolean;
 }
 

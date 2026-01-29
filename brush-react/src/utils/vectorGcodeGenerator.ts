@@ -2,7 +2,7 @@
  * G-code generator for vector paths from the drawing API
  */
 
-import type { Path, Point, ColoredPath } from './drawingApi';
+import type { Point, ColoredPath } from './drawingApi';
 import { getPathLength, optimizePaths } from './pathOptimizer';
 import { BacklashFixer } from './backlashFixer';
 
@@ -227,8 +227,6 @@ export function generateVectorGCode(
     backlashY,
     safeZ,
     dipInterval,
-    dipX,
-    dipY,
     continuousPlot,
     colorPaletteEnabled,
     mainColor,

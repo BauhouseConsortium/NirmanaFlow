@@ -3,10 +3,7 @@ import { createPortal } from 'react-dom';
 import { glyphs as originalGlyphs } from '../../data/glyphs';
 import { transliterateToba } from '../../utils/transliteration';
 
-interface Point {
-  x: number;
-  y: number;
-}
+type GlyphPoint = [number, number];
 
 interface GlyphEditorProps {
   isOpen: boolean;
@@ -27,7 +24,7 @@ export function GlyphEditor({ isOpen, onClose, latinText }: GlyphEditorProps) {
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [zoom, setZoom] = useState(200);
-  const [offset, setOffset] = useState({ x: 150, y: 250 });
+  const [offset] = useState({ x: 150, y: 250 });
 
   // Get Batak characters from Latin text
   const batakChars = useMemo(() => {
@@ -268,7 +265,7 @@ export function GlyphEditor({ isOpen, onClose, latinText }: GlyphEditorProps) {
     const nextIdx = Math.min(selectedPoint + 1, path.length - 1);
     const [x1, y1] = path[selectedPoint];
     const [x2, y2] = path[nextIdx];
-    const newPoint = [(x1 + x2) / 2, (y1 + y2) / 2];
+    const newPoint: GlyphPoint = [(x1 + x2) / 2, (y1 + y2) / 2];
 
     setEditedGlyphs((prev: typeof originalGlyphs) => {
       const updated = { ...prev };
