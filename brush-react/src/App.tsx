@@ -10,6 +10,7 @@ import { Console } from './components/Console';
 import { ConnectionIndicator } from './components/ConnectionIndicator';
 import { StreamingProgress } from './components/StreamingProgress';
 import { SplashScreen, useSplashScreen } from './components/SplashScreen';
+import { JogControlModal } from './components/JogControlModal';
 import { useVectorSettings, getColorWells, type ColorWell } from './hooks/useVectorSettings';
 import { useConsole } from './hooks/useConsole';
 import { useFluidNC } from './hooks/useFluidNC';
@@ -24,6 +25,7 @@ export default function App() {
   const [placementMode, setPlacementMode] = useState<{ colorIndex: 1 | 2 | 3 | 4; color: string } | null>(null);
   const [showBottomPane, setShowBottomPane] = useState(true);
   const [showPreviewPane, setShowPreviewPane] = useState(true);
+  const [showJogModal, setShowJogModal] = useState(false);
 
   const { settings, updateSetting, resetSettings, loadSettings } = useVectorSettings();
   const { showSplash, dismissSplash, resetSplash } = useSplashScreen();
@@ -251,6 +253,76 @@ export default function App() {
     log('Streaming cancelled', 'warning');
   }, [fluidNC, log]);
 
+  // Machine control callbacks for Tool menu
+  const handleHome = useCallback(() => {
+    // Custom homing sequence - moves to corner, finds zero
+    const homingSequence = [
+      'G10 P0 L20 X0 Y0 Z0',
+      'G0 Z10 F800',
+      'G90',
+      'G0 X160 Y160 Z32 F1900',
+      'G0 X0 Y0 Z27 F1900',
+      'G10 P0 L20 X0 Y0 Z10',
+      'G1 Z15 F300',
+      'G1 Z10 F300',
+      'G0 X-10 Y-10 F800',
+      'G0 X-6 Y-6 F500',
+      'G10 P0 L20 X0 Y0 Z14',
+    ];
+    log('Running homing sequence...', 'info');
+    fluidNC.startStreaming(homingSequence);
+  }, [fluidNC, log]);
+
+  const handleUnlock = useCallback(() => {
+    fluidNC.unlock();
+    log('Unlock command sent', 'info');
+  }, [fluidNC, log]);
+
+  const handlePark = useCallback(() => {
+    fluidNC.send('G0 Z20 F800');
+    setTimeout(() => {
+      fluidNC.send('G0 X10 Y130 F2000');
+    }, 500);
+    log('Moving to park position', 'info');
+  }, [fluidNC, log]);
+
+  const handlePenUp = useCallback(() => {
+    fluidNC.send('G0 Z10 F500');
+    log('Pen up', 'info');
+  }, [fluidNC, log]);
+
+  const handlePenDown = useCallback(() => {
+    fluidNC.send('G1 Z0 F300');
+    log('Pen down', 'info');
+  }, [fluidNC, log]);
+
+  const handleStop = useCallback(() => {
+    fluidNC.stop();
+    log('Emergency stop!', 'error');
+  }, [fluidNC, log]);
+
+  const handleOpenJog = useCallback(() => {
+    setShowJogModal(true);
+  }, []);
+
+  const handleCloseJog = useCallback(() => {
+    setShowJogModal(false);
+  }, []);
+
+  const handleJog = useCallback((axis: 'X' | 'Y' | 'Z', distance: number, feedRate = 1000) => {
+    fluidNC.jog(axis, distance, feedRate);
+  }, [fluidNC]);
+
+  const handleSetZero = useCallback(() => {
+    fluidNC.setZero();
+    log('Work zero set', 'success');
+  }, [fluidNC, log]);
+
+  const handleGoToZero = useCallback(() => {
+    fluidNC.goToZero();
+    log('Moving to zero', 'info');
+  }, [fluidNC, log]);
+
   // Color well placement handlers
   const handleSetColorWellPosition = useCallback((colorIndex: 1 | 2 | 3 | 4) => {
     const well = colorWells.find(w => w.id === colorIndex);
@@ -277,6 +349,21 @@ export default function App() {
     <div className="h-screen flex flex-col bg-slate-900 text-white overflow-hidden">
       {/* Splash Screen */}
       {showSplash && <SplashScreen onDismiss={dismissSplash} />}
+
+      {/* Jog Control Modal */}
+      <JogControlModal
+        isOpen={showJogModal}
+        onClose={handleCloseJog}
+        isConnected={fluidNC.isConnected}
+        machineState={fluidNC.status.machineState}
+        position={fluidNC.status.position}
+        onJog={handleJog}
+        onHome={handleHome}
+        onUnlock={handleUnlock}
+        onSetZero={handleSetZero}
+        onGoToZero={handleGoToZero}
+        onStop={handleStop}
+      />
 
       {/* Header */}
       <header className="flex-shrink-0 border-b border-slate-700 bg-slate-900 z-10">
@@ -305,6 +392,14 @@ export default function App() {
               isLoading={isLoading}
               isConnected={fluidNC.isConnected}
               isStreaming={fluidNC.isStreaming}
+              onHome={handleHome}
+              onUnlock={handleUnlock}
+              onPark={handlePark}
+              onPenUp={handlePenUp}
+              onPenDown={handlePenDown}
+              onStop={handleStop}
+              onOpenJog={handleOpenJog}
+              machineState={fluidNC.status.machineState}
             />
             <div className="h-6 w-px bg-slate-700" />
             {/* Panel toggles */}
