@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import type { VectorSettings } from '../hooks/useVectorSettings';
 import { getColorWells } from '../hooks/useVectorSettings';
 
@@ -12,11 +12,110 @@ interface VectorSettingsPanelProps {
   isConnected?: boolean;
 }
 
-type Section = 'canvas' | 'output' | 'machine' | 'ink' | 'palette' | 'hardware';
+type SectionId = 'canvas' | 'output' | 'machine' | 'ink' | 'palette' | 'hardware';
+
+// Moved outside to prevent re-creation on every render
+// Uses local state to prevent focus loss during typing
+function NumberInput({
+  label,
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  unit,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  unit?: string;
+}) {
+  const [localValue, setLocalValue] = useState(String(value));
+
+  // Sync local value when prop changes (but not during editing)
+  useEffect(() => {
+    setLocalValue(String(value));
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = e.target.value;
+    setLocalValue(newValue);
+
+    const num = Number(newValue);
+    if (!isNaN(num) && newValue !== '') {
+      onChange(num);
+    }
+  };
+
+  const handleBlur = () => {
+    // On blur, ensure we have a valid value
+    const num = Number(localValue);
+    if (isNaN(num) || localValue === '') {
+      setLocalValue(String(value));
+    }
+  };
+
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-xs text-slate-400">{label}</label>
+      <div className="flex items-center gap-1">
+        <input
+          type="number"
+          value={localValue}
+          onChange={handleChange}
+          onBlur={handleBlur}
+          min={min}
+          max={max}
+          step={step}
+          className="w-20 px-2 py-1 text-xs bg-slate-800 border border-slate-600 rounded text-white text-right"
+        />
+        {unit && <span className="text-xs text-slate-500 w-8">{unit}</span>}
+      </div>
+    </div>
+  );
+}
+
+// Collapsible section component - moved outside
+function CollapsibleSection({
+  id,
+  title,
+  expandedSection,
+  onToggle,
+  children,
+}: {
+  id: SectionId;
+  title: string;
+  expandedSection: SectionId | null;
+  onToggle: (id: SectionId) => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="border-b border-slate-700 last:border-b-0">
+      <button
+        onClick={() => onToggle(id)}
+        className="w-full px-3 py-2 flex items-center justify-between text-sm text-slate-300 hover:bg-slate-700/50"
+      >
+        {title}
+        <svg
+          className={`w-4 h-4 transition-transform ${expandedSection === id ? 'rotate-180' : ''}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {expandedSection === id && <div className="px-3 pb-3 space-y-2">{children}</div>}
+    </div>
+  );
+}
 
 export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSetColorWellPosition, onJogToPosition, isConnected }: VectorSettingsPanelProps) {
   const colorWells = getColorWells(settings);
-  const [expandedSection, setExpandedSection] = useState<Section | null>('canvas');
+  const [expandedSection, setExpandedSection] = useState<SectionId | null>('canvas');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = () => {
@@ -47,63 +146,9 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
     event.target.value = '';
   };
 
-  const toggle = (section: Section) => {
+  const toggle = (section: SectionId) => {
     setExpandedSection(prev => prev === section ? null : section);
   };
-
-  const Section = ({ id, title, children }: { id: Section; title: string; children: React.ReactNode }) => (
-    <div className="border-b border-slate-700 last:border-b-0">
-      <button
-        onClick={() => toggle(id)}
-        className="w-full px-3 py-2 flex items-center justify-between text-sm text-slate-300 hover:bg-slate-700/50"
-      >
-        {title}
-        <svg
-          className={`w-4 h-4 transition-transform ${expandedSection === id ? 'rotate-180' : ''}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {expandedSection === id && <div className="px-3 pb-3 space-y-2">{children}</div>}
-    </div>
-  );
-
-  const NumberInput = ({
-    label,
-    value,
-    onChange,
-    min,
-    max,
-    step = 1,
-    unit,
-  }: {
-    label: string;
-    value: number;
-    onChange: (v: number) => void;
-    min?: number;
-    max?: number;
-    step?: number;
-    unit?: string;
-  }) => (
-    <div className="flex items-center justify-between gap-2">
-      <label className="text-xs text-slate-400">{label}</label>
-      <div className="flex items-center gap-1">
-        <input
-          type="number"
-          value={value}
-          onChange={e => onChange(Number(e.target.value))}
-          min={min}
-          max={max}
-          step={step}
-          className="w-20 px-2 py-1 text-xs bg-slate-800 border border-slate-600 rounded text-white text-right"
-        />
-        {unit && <span className="text-xs text-slate-500 w-8">{unit}</span>}
-      </div>
-    </div>
-  );
 
   return (
     <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
@@ -142,7 +187,7 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
         </div>
       </div>
 
-      <Section id="canvas" title="Canvas">
+      <CollapsibleSection id="canvas" title="Canvas" expandedSection={expandedSection} onToggle={toggle}>
         <NumberInput
           label="Width"
           value={settings.canvasWidth}
@@ -159,9 +204,9 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
           max={500}
           unit="px"
         />
-      </Section>
+      </CollapsibleSection>
 
-      <Section id="output" title="Output">
+      <CollapsibleSection id="output" title="Output" expandedSection={expandedSection} onToggle={toggle}>
         <NumberInput
           label="Target Width"
           value={settings.targetWidth}
@@ -259,9 +304,9 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
             })}
           </div>
         </div>
-      </Section>
+      </CollapsibleSection>
 
-      <Section id="machine" title="Machine">
+      <CollapsibleSection id="machine" title="Machine" expandedSection={expandedSection} onToggle={toggle}>
         <NumberInput
           label="Feed Rate"
           value={settings.feedRate}
@@ -306,9 +351,9 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
           step={0.01}
           unit="mm"
         />
-      </Section>
+      </CollapsibleSection>
 
-      <Section id="ink" title="Ink">
+      <CollapsibleSection id="ink" title="Ink" expandedSection={expandedSection} onToggle={toggle}>
         <div className="flex items-center justify-between">
           <label className="text-xs text-slate-400">Continuous Plot</label>
           <input
@@ -346,9 +391,9 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
             />
           </>
         )}
-      </Section>
+      </CollapsibleSection>
 
-      <Section id="palette" title="Color Palette">
+      <CollapsibleSection id="palette" title="Color Palette" expandedSection={expandedSection} onToggle={toggle}>
         <div className="rounded-lg border border-slate-700/50 overflow-hidden">
             {colorWells.map((well, index) => (
               <div
@@ -431,9 +476,9 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
               </div>
             ))}
           </div>
-      </Section>
+      </CollapsibleSection>
 
-      <Section id="hardware" title="Hardware">
+      <CollapsibleSection id="hardware" title="Hardware" expandedSection={expandedSection} onToggle={toggle}>
         <div className="flex items-center justify-between gap-2">
           <label className="text-xs text-slate-400">Controller</label>
           <input
@@ -443,7 +488,7 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
             className="flex-1 px-2 py-1 text-xs bg-slate-800 border border-slate-600 rounded text-white"
           />
         </div>
-      </Section>
+      </CollapsibleSection>
     </div>
   );
 }

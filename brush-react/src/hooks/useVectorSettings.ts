@@ -23,7 +23,7 @@ export const VectorSettingsSchema = z.object({
   dipInterval: z.number().min(10).max(500).default(80),
   dipX: z.number().min(0).max(200).default(41),
   dipY: z.number().min(0).max(200).default(5),
-  continuousPlot: z.boolean().default(true),
+  continuousPlot: z.boolean().default(false),
 
   // Main color selection (uses color well position when color palette is enabled)
   mainColor: z.number().min(1).max(4).default(1),
