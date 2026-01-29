@@ -186,6 +186,45 @@ When handling mouse input on the canvas preview, the coordinate transformation l
 
 If mouse handlers don't replicate this exact conditional logic, cursor positions will drift (especially noticeable at canvas edges). Always keep `drawCanvas()` viewport calculations and mouse handler calculations in sync.
 
+### Text Rendering & Y-Flip Compensation (strokeFont.ts)
+The preview uses a **Y-flip** in `toScreen()` to display coordinates with Y=0 at the bottom (standard math/plotter coordinates):
+```typescript
+const toScreen = (x: number, y: number): [number, number] => {
+  return [
+    offsetX + (x - viewMinX) * scale,
+    offsetY + (viewMaxY - y) * scale  // Y-flip: higher Y = lower on screen
+  ];
+};
+```
+
+**Problem**: Text rendered via `strokeFont.ts` would appear upside-down because the Y-flip inverts character shapes.
+
+**Solution**: The `renderText()` function pre-flips Y coordinates within each character cell:
+```typescript
+const transformedPath: Point[] = stroke.map(([px, py]) => [
+  cursorX + px * size,                    // X unchanged
+  cursorY + (1 - py) * charHeight,        // Y flipped within character
+]);
+```
+
+**Why this works**:
+- Character definitions have Y=0 at top, Y=1 at bottom (normalized from 0-7 grid)
+- Pre-flipping Y (`1 - py`) makes Y=0 at bottom within the character
+- Preview's Y-flip then displays characters upright
+
+**Critical**: Do NOT add X mirroring to strokeFont - it causes letters to appear horizontally reversed (E→Ǝ). Only Y needs compensation for the preview's Y-flip.
+
+### Batak Text Rendering (flowExecutor.ts → renderBatakText)
+The same Y-flip compensation is applied to Batak glyph rendering:
+```typescript
+const scaledPath: Point[] = glyphPath.map(([px, py]) => [
+  renderX + px * scale,
+  startY - py * scale,  // Negated Y to compensate for preview Y-flip
+]);
+```
+
+Batak glyph coordinates have Y increasing downward (standard font design convention), so negating `py` flips the glyphs to display correctly after the preview's Y-flip.
+
 ### Key Files for Common Tasks
 - **Add new drawing primitive**: `src/utils/drawingApi.ts`
 - **Add new example**: `src/data/examples.ts`

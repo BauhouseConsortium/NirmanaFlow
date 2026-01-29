@@ -471,10 +471,11 @@ function renderBatakText(
       }
 
       // Render glyph paths
+      // Flip Y to compensate for preview's Y-flip (same as strokeFont)
       for (const glyphPath of glyph.paths) {
         const scaledPath: Point[] = glyphPath.map(([px, py]) => [
           renderX + px * scale,
-          startY + py * scale,
+          startY - py * scale,
         ]);
 
         // Simplify path to remove clustered points that cause artifacts
