@@ -14,6 +14,49 @@ interface VectorSettingsPanelProps {
 
 type SectionId = 'canvas' | 'output' | 'machine' | 'ink' | 'palette' | 'hardware';
 
+// Text input with local state to prevent focus loss during typing
+function TextInput({
+  label,
+  value,
+  onChange,
+  className,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+}) {
+  const [localValue, setLocalValue] = useState(value);
+  const isFocusedRef = useRef(false);
+
+  // Sync local value when prop changes, but only when not focused
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setLocalValue(value);
+    }
+  }, [value]);
+
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <label className="text-xs text-slate-400">{label}</label>
+      <input
+        type="text"
+        value={localValue}
+        onChange={e => {
+          setLocalValue(e.target.value);
+          onChange(e.target.value);
+        }}
+        onFocus={() => { isFocusedRef.current = true; }}
+        onBlur={() => {
+          isFocusedRef.current = false;
+          setLocalValue(value); // Sync back to prop value on blur
+        }}
+        className={className || "flex-1 px-2 py-1 text-xs bg-slate-800 border border-slate-600 rounded text-white"}
+      />
+    </div>
+  );
+}
+
 // Moved outside to prevent re-creation on every render
 // Uses local state to prevent focus loss during typing
 function NumberInput({
@@ -34,10 +77,13 @@ function NumberInput({
   unit?: string;
 }) {
   const [localValue, setLocalValue] = useState(String(value));
+  const isFocusedRef = useRef(false);
 
-  // Sync local value when prop changes (but not during editing)
+  // Sync local value when prop changes, but only when not focused
   useEffect(() => {
-    setLocalValue(String(value));
+    if (!isFocusedRef.current) {
+      setLocalValue(String(value));
+    }
   }, [value]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,6 +97,7 @@ function NumberInput({
   };
 
   const handleBlur = () => {
+    isFocusedRef.current = false;
     // On blur, ensure we have a valid value
     const num = Number(localValue);
     if (isNaN(num) || localValue === '') {
@@ -66,6 +113,7 @@ function NumberInput({
           type="number"
           value={localValue}
           onChange={handleChange}
+          onFocus={() => { isFocusedRef.current = true; }}
           onBlur={handleBlur}
           min={min}
           max={max}
@@ -479,15 +527,11 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
       </CollapsibleSection>
 
       <CollapsibleSection id="hardware" title="Hardware" expandedSection={expandedSection} onToggle={toggle}>
-        <div className="flex items-center justify-between gap-2">
-          <label className="text-xs text-slate-400">Controller</label>
-          <input
-            type="text"
-            value={settings.controllerHost}
-            onChange={e => onUpdate('controllerHost', e.target.value)}
-            className="flex-1 px-2 py-1 text-xs bg-slate-800 border border-slate-600 rounded text-white"
-          />
-        </div>
+        <TextInput
+          label="Controller"
+          value={settings.controllerHost}
+          onChange={v => onUpdate('controllerHost', v)}
+        />
       </CollapsibleSection>
     </div>
   );
