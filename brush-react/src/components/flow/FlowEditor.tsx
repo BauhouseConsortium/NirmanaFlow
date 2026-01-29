@@ -172,32 +172,6 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
     setSelectedNodes([]);
   }, [selectedNodes, nodes, setNodes]);
 
-  // Ungroup nodes (available for future use)
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleUngroup = useCallback((groupId: string) => {
-    const groupNode = nodes.find((n) => n.id === groupId);
-    if (!groupNode) return;
-
-    setNodes((nds) => {
-      return nds
-        .filter((n) => n.id !== groupId)
-        .map((node) => {
-          if (node.parentId === groupId) {
-            return {
-              ...node,
-              position: {
-                x: node.position.x + groupNode.position.x,
-                y: node.position.y + groupNode.position.y,
-              },
-              parentId: undefined,
-              extent: undefined,
-            };
-          }
-          return node;
-        });
-    });
-  }, [nodes, setNodes]);
-
   // Add new node
   const handleAddNode = useCallback(
     (type: string) => {

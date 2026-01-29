@@ -224,21 +224,6 @@ function parseNodeData<T extends NodeType>(
   return result.success ? result.data : null;
 }
 
-/**
- * Get node data with fallback to defaults
- * Uses Zod schema defaults for missing fields
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function getNodeDataSafe<T extends NodeType>(
-  _nodeType: T,
-  data: Record<string, unknown>,
-  defaults: Partial<Record<string, unknown>>
-): Record<string, unknown> {
-  // Merge data with defaults, data takes precedence
-  const merged = { ...defaults, ...data };
-  return merged;
-}
-
 // Get all source nodes that connect to a target node
 function getSourceNodes(targetId: string, nodes: Node[], edges: Edge[]): Node[] {
   const incomingEdges = edges.filter((e) => e.target === targetId);
