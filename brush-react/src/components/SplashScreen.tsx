@@ -105,6 +105,16 @@ export function SplashScreen({ onDismiss }: SplashScreenProps) {
             </p>
           </div>
 
+          {/* Connection hint - only show on HTTPS */}
+          {typeof window !== 'undefined' && window.location.protocol === 'https:' && (
+            <div className="bg-blue-500/10 rounded-lg p-3 border border-blue-500/20">
+              <p className="text-xs text-blue-300/80">
+                <span className="text-blue-200 font-medium">📡 Plotter connection:</span> To stream G-code to FluidNC, 
+                click the connection help button (?) in the header for setup instructions.
+              </p>
+            </div>
+          )}
+
           <p className="text-xs text-slate-500 text-center">Created by Budi Prakosa AKA Manticore from Bauhouse Consorxium</p>
         </div>
 
