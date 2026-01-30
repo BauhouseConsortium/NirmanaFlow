@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import type { VectorSettings } from '../hooks/useVectorSettings';
 import { getColorWells } from '../hooks/useVectorSettings';
+import { DipSequenceModal } from './DipSequenceModal';
 
 interface VectorSettingsPanelProps {
   settings: VectorSettings;
@@ -164,6 +165,7 @@ function CollapsibleSection({
 export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSetColorWellPosition, onJogToPosition, isConnected }: VectorSettingsPanelProps) {
   const colorWells = getColorWells(settings);
   const [expandedSection, setExpandedSection] = useState<SectionId | null>('canvas');
+  const [isDipModalOpen, setIsDipModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = () => {
@@ -437,6 +439,16 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
               max={150}
               unit="mm"
             />
+            <button
+              onClick={() => setIsDipModalOpen(true)}
+              className="mt-2 w-full px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors flex items-center justify-center gap-1.5"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+              {settings.customDipSequence ? 'Edit Dip Sequence' : 'Configure Dip Sequence'}
+            </button>
           </>
         )}
       </CollapsibleSection>
@@ -533,6 +545,15 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
           onChange={v => onUpdate('controllerHost', v)}
         />
       </CollapsibleSection>
+
+      <DipSequenceModal
+        isOpen={isDipModalOpen}
+        onClose={() => setIsDipModalOpen(false)}
+        customSequence={settings.customDipSequence}
+        onSequenceChange={v => onUpdate('customDipSequence', v)}
+        dipX={settings.dipX}
+        dipY={settings.dipY}
+      />
     </div>
   );
 }

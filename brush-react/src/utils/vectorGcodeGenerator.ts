@@ -5,6 +5,7 @@
 import type { Point, ColoredPath } from './drawingApi';
 import { getPathLength, optimizePaths } from './pathOptimizer';
 import { BacklashFixer } from './backlashFixer';
+import { WIGGLE_DIP_SEQUENCE, processDipSequence } from './gcodeDipLogic';
 
 export interface VectorSettings {
   // Canvas dimensions (input coordinate space)
@@ -28,6 +29,7 @@ export interface VectorSettings {
   dipX: number;
   dipY: number;
   continuousPlot: boolean;
+  customDipSequence: string;
 
   // Main color (1-4) - which color well to use when color palette is enabled
   mainColor: number;
@@ -228,11 +230,18 @@ export function generateVectorGCode(
     safeZ,
     dipInterval,
     continuousPlot,
+    customDipSequence,
     colorPaletteEnabled,
     mainColor,
     artefactThreshold,
     clipToWorkArea,
   } = settings;
+
+  // Generate dip sequence G-code using custom or default sequence
+  const generateDipGCode = (dipX: number, dipY: number): string[] => {
+    const template = customDipSequence || WIGGLE_DIP_SEQUENCE;
+    return processDipSequence(template, dipX, dipY);
+  };
 
   // Filter tiny paths (using points from ColoredPath)
   let filteredPaths = paths.filter((cp) => getPathLength(cp.points) >= artefactThreshold);
@@ -333,10 +342,7 @@ export function generateVectorGCode(
     const dipPos = getDipPosition(firstPathColor);
     dipCount++;
     lines.push(`(Initial Dip #${dipCount}${colorPaletteEnabled ? ` - Color ${currentColor ?? mainColor}` : ''})`);
-    lines.push(`G0 X${dipPos.x} Y${dipPos.y}`);
-    lines.push('G1 Z-2 F500');
-    lines.push('G4 P0.5');
-    lines.push(`G0 Z${safeZ}`);
+    lines.push(...generateDipGCode(dipPos.x, dipPos.y));
   }
 
   // Work area bounds for clipping
@@ -403,10 +409,7 @@ export function generateVectorGCode(
         dipCount++;
         const dipPos = getDipPosition(pathColor);
         lines.push(`(Dip #${dipCount} at dist ${distanceAccumulator.toFixed(1)}${colorPaletteEnabled ? ` - Color ${pathColor ?? mainColor}` : ''})`);
-        lines.push(`G0 X${dipPos.x} Y${dipPos.y}`);
-        lines.push('G1 Z-2 F500');
-        lines.push('G4 P0.5');
-        lines.push(`G0 Z${safeZ}`);
+        lines.push(...generateDipGCode(dipPos.x, dipPos.y));
         distanceAccumulator = 0;
       }
     }

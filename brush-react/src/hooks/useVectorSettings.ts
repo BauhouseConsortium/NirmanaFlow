@@ -24,6 +24,7 @@ export const VectorSettingsSchema = z.object({
   dipX: z.number().min(0).max(200).default(41),
   dipY: z.number().min(0).max(200).default(5),
   continuousPlot: z.boolean().default(false),
+  customDipSequence: z.string().default(''),
 
   // Main color selection (uses color well position when color palette is enabled)
   mainColor: z.number().min(1).max(4).default(1),
@@ -128,6 +129,7 @@ export function getFieldConstraints(key: keyof VectorSettings): { min?: number; 
     dipX: { min: 0, max: 200, step: 1 },
     dipY: { min: 0, max: 200, step: 1 },
     continuousPlot: {},
+    customDipSequence: {},
     mainColor: { min: 1, max: 4, step: 1 },
     colorPaletteEnabled: {},
     colorWell1X: { min: 0, max: 200, step: 1 },

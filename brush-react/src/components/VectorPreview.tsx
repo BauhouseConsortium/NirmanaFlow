@@ -983,14 +983,15 @@ function VectorPreviewComponent({
           setZoomLevel(z => Math.max(0.25, Math.min(10, z * delta)));
         }}
         onMouseDown={(e) => {
-          // Middle mouse button, alt+left click, or pan mode left click for panning
+          // Right-click, middle mouse button, alt+left click, or pan mode left click for panning
           if (placementMode) return;
-          if (e.button === 1 || (e.button === 0 && e.altKey) || (e.button === 0 && panMode)) {
+          if (e.button === 2 || e.button === 1 || (e.button === 0 && e.altKey) || (e.button === 0 && panMode)) {
             e.preventDefault();
             isPanningRef.current = true;
             lastPanPosRef.current = { x: e.clientX, y: e.clientY };
           }
         }}
+        onContextMenu={(e) => e.preventDefault()}
         onMouseUp={() => {
           isPanningRef.current = false;
         }}
