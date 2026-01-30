@@ -183,6 +183,30 @@ export const CodeNodeDataSchema = BaseNodeDataSchema.extend({
   error: z.string().optional(),
 });
 
+// ============ Slicer Node ============
+
+export const SlicerNodeDataSchema = BaseNodeDataSchema.extend({
+  // Extrusion settings
+  extrudeHeight: z.number().min(0.1).max(500),
+  wallThickness: z.number().min(0.1).max(10),
+  // Slice settings
+  layerHeight: z.number().min(0.05).max(1),
+  extractLayer: z.number().int().min(-1), // -1 = all layers flattened
+  // Infill settings
+  infillPattern: z.enum(['lines', 'grid', 'triangles', 'honeycomb', 'gyroid', 'concentric']),
+  infillDensity: z.number().min(0).max(100),
+  infillAngle: z.number().min(0).max(180),
+  // Output options
+  includeWalls: z.boolean(),
+  includeInfill: z.boolean(),
+  includeTravel: z.boolean(),
+  // State
+  isSlicing: z.boolean().optional(),
+  sliceProgress: z.number().min(0).max(100).optional(),
+  error: z.string().optional(),
+  lastSliceHash: z.string().optional(),
+});
+
 // ============ Output Node ============
 
 export const OutputNodeDataSchema = BaseNodeDataSchema;
@@ -210,6 +234,7 @@ export const nodeSchemaMap = {
   attractor: AttractorNodeDataSchema,
   lsystem: LSystemNodeDataSchema,
   code: CodeNodeDataSchema,
+  slicer: SlicerNodeDataSchema,
   output: OutputNodeDataSchema,
 } as const;
 
@@ -235,6 +260,7 @@ export type AlgorithmicNodeData = z.infer<typeof AlgorithmicNodeDataSchema>;
 export type AttractorNodeData = z.infer<typeof AttractorNodeDataSchema>;
 export type LSystemNodeData = z.infer<typeof LSystemNodeDataSchema>;
 export type CodeNodeData = z.infer<typeof CodeNodeDataSchema>;
+export type SlicerNodeData = z.infer<typeof SlicerNodeDataSchema>;
 export type OutputNodeData = z.infer<typeof OutputNodeDataSchema>;
 
 // Union type
@@ -258,6 +284,7 @@ export type FlowNodeData =
   | AttractorNodeData
   | LSystemNodeData
   | CodeNodeData
+  | SlicerNodeData
   | OutputNodeData;
 
 // ============ Validation Helpers ============

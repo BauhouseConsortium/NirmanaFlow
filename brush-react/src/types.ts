@@ -32,6 +32,11 @@ export interface Settings {
   continuousPlot: boolean;
   controllerHost: string;
   customDipSequence: string;
+  // Path optimization settings (Clipper2)
+  optimizePaths: boolean;
+  simplifyTolerance: number;
+  mergeOverlapping: boolean;
+  minSegmentLength: number;
 }
 
 export interface GeneratedGCode {

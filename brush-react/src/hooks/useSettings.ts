@@ -18,6 +18,11 @@ const DEFAULT_SETTINGS: Settings = {
   continuousPlot: false,
   controllerHost: 'http://192.168.0.248',
   customDipSequence: '',
+  // Path optimization (Clipper2)
+  optimizePaths: false,
+  simplifyTolerance: 0.1,
+  mergeOverlapping: true,
+  minSegmentLength: 0.5,
 };
 
 export function useSettings() {

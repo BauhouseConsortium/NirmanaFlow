@@ -3,7 +3,8 @@
  */
 
 import type { Point, ColoredPath } from './drawingApi';
-import { getPathLength, optimizePaths } from './pathOptimizer';
+import { getPathLength, optimizePaths, optimizePathsAdvanced } from './pathOptimizer';
+import { optimizeForPlotter } from './plotterOptimizer';
 import { BacklashFixer } from './backlashFixer';
 import { WIGGLE_DIP_SEQUENCE, processDipSequence } from './gcodeDipLogic';
 
@@ -54,6 +55,18 @@ export interface VectorSettings {
 
   // Clipping
   clipToWorkArea: boolean;
+
+  // Path optimization (Clipper2)
+  optimizePaths?: boolean;
+  simplifyTolerance?: number;
+  mergeOverlapping?: boolean;
+  minSegmentLength?: number;
+
+  // Plotter optimization
+  plotterOptimize?: boolean;
+  removeDuplicateLines?: boolean;
+  mergeConnectedPaths?: boolean;
+  optimizePathOrder?: boolean;
 }
 
 export interface GeneratedVectorGCode {
@@ -250,7 +263,24 @@ export function generateVectorGCode(
   // Extract plain paths for optimization, then re-associate with colors
   const plainPaths = filteredPaths.map(cp => cp.points);
   const colors = filteredPaths.map(cp => cp.color);
-  const optimizedPlainPaths = optimizePaths(plainPaths);
+  let optimizedPlainPaths = optimizePaths(plainPaths);
+
+  // Apply plotter optimization if enabled
+  if (settings.plotterOptimize) {
+    const plotterResult = optimizeForPlotter(optimizedPlainPaths, {
+      removeDuplicates: settings.removeDuplicateLines ?? true,
+      mergePaths: settings.mergeConnectedPaths ?? true,
+      optimizeOrder: settings.optimizePathOrder ?? true,
+      simplify: true,
+      startPoint: [offsetX, offsetY],
+    });
+    optimizedPlainPaths = plotterResult.paths;
+    
+    // Log optimization stats
+    if (plotterResult.stats.duplicatesRemoved > 0 || plotterResult.stats.pathsMerged > 0) {
+      console.log(`Plotter optimization: removed ${plotterResult.stats.duplicatesRemoved} duplicate segments, merged ${plotterResult.stats.pathsMerged} paths, ${plotterResult.stats.travelReduction}% travel reduction`);
+    }
+  }
 
   // Note: optimization may reorder paths, so we need to create new ColoredPaths
   // For simplicity, we'll use the paths as-is if colors are being used
@@ -261,6 +291,8 @@ export function generateVectorGCode(
   } else {
     filteredPaths = optimizedPlainPaths.map(points => ({ points, color: undefined }));
   }
+
+  // Note: For Clipper2 advanced optimization, use generateVectorGCodeAsync instead
 
   if (filteredPaths.length === 0) {
     return {
@@ -482,4 +514,58 @@ function generateSVG(
   <rect width="100%" height="100%" fill="white"/>
   ${pathStrings.join('\n  ')}
 </svg>`;
+}
+
+/**
+ * Async version of generateVectorGCode that uses Clipper2 WASM for advanced optimization
+ */
+export async function generateVectorGCodeAsync(
+  paths: ColoredPath[],
+  settings: VectorSettings
+): Promise<GeneratedVectorGCode> {
+  // If Clipper2 optimization is not enabled, use sync version
+  if (!settings.optimizePaths) {
+    return generateVectorGCode(paths, settings);
+  }
+
+  const {
+    artefactThreshold,
+    colorPaletteEnabled,
+    simplifyTolerance = 0.1,
+    mergeOverlapping = true,
+    minSegmentLength = 0.5,
+  } = settings;
+
+  // Filter tiny paths first
+  let filteredPaths = paths.filter((cp) => getPathLength(cp.points) >= artefactThreshold);
+
+  // Extract plain paths for optimization
+  const plainPaths = filteredPaths.map(cp => cp.points);
+  const colors = filteredPaths.map(cp => cp.color);
+
+  // Use Clipper2 advanced optimization
+  const optimizedPlainPaths = await optimizePathsAdvanced(plainPaths, {
+    simplifyTolerance,
+    mergeOverlapping,
+    minSegmentLength,
+  });
+
+  // Update filtered paths based on color palette usage
+  if (colorPaletteEnabled && colors.some(c => c !== undefined)) {
+    // Keep original order to preserve color associations
+    // (optimization might break color groupings)
+  } else {
+    filteredPaths = optimizedPlainPaths.map(points => ({ points, color: undefined }));
+  }
+
+  // Log optimization results
+  const originalPointCount = plainPaths.reduce((sum, p) => sum + p.length, 0);
+  const optimizedPointCount = optimizedPlainPaths.reduce((sum, p) => sum + p.length, 0);
+  console.log(`Clipper2 optimization: ${originalPointCount} points → ${optimizedPointCount} points (${Math.round((1 - optimizedPointCount / originalPointCount) * 100)}% reduction)`);
+
+  // Generate G-code with optimized paths
+  return generateVectorGCode(filteredPaths, {
+    ...settings,
+    optimizePaths: false, // Already optimized, prevent re-optimization
+  });
 }

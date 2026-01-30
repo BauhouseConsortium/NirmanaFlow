@@ -13,7 +13,7 @@ interface VectorSettingsPanelProps {
   isConnected?: boolean;
 }
 
-type SectionId = 'canvas' | 'output' | 'machine' | 'ink' | 'palette' | 'hardware';
+type SectionId = 'canvas' | 'output' | 'machine' | 'optimize' | 'ink' | 'palette' | 'hardware';
 
 // Text input with local state to prevent focus loss during typing
 function TextInput({
@@ -401,6 +401,100 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
           step={0.01}
           unit="mm"
         />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="optimize" title="Path Optimization" expandedSection={expandedSection} onToggle={toggle}>
+        {/* Plotter Optimization */}
+        <div className="mb-3 pb-3 border-b border-slate-700/50">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <label className="text-xs text-slate-300 font-medium">Plotter Optimize</label>
+              <p className="text-[10px] text-slate-500 mt-0.5">Remove duplicates, merge paths, optimize order</p>
+            </div>
+            <input
+              type="checkbox"
+              checked={settings.plotterOptimize}
+              onChange={e => onUpdate('plotterOptimize', e.target.checked)}
+              className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-emerald-500"
+            />
+          </div>
+          {settings.plotterOptimize && (
+            <div className="space-y-1.5 ml-2 pl-2 border-l border-slate-700/50">
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-slate-400">Remove Duplicate Lines</label>
+                <input
+                  type="checkbox"
+                  checked={settings.removeDuplicateLines}
+                  onChange={e => onUpdate('removeDuplicateLines', e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-emerald-500"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-slate-400">Merge Connected Paths</label>
+                <input
+                  type="checkbox"
+                  checked={settings.mergeConnectedPaths}
+                  onChange={e => onUpdate('mergeConnectedPaths', e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-emerald-500"
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <label className="text-xs text-slate-400">Optimize Path Order</label>
+                <input
+                  type="checkbox"
+                  checked={settings.optimizePathOrder}
+                  onChange={e => onUpdate('optimizePathOrder', e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-slate-600 bg-slate-800 text-emerald-500"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Clipper2 Polygon Operations */}
+        <div className="flex items-center justify-between">
+          <div>
+            <label className="text-xs text-slate-400">Enable Clipper2</label>
+            <p className="text-[10px] text-slate-600 mt-0.5">WASM polygon operations</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={settings.optimizePaths}
+            onChange={e => onUpdate('optimizePaths', e.target.checked)}
+            className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500"
+          />
+        </div>
+        {settings.optimizePaths && (
+          <>
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-slate-400">Merge Overlapping</label>
+              <input
+                type="checkbox"
+                checked={settings.mergeOverlapping}
+                onChange={e => onUpdate('mergeOverlapping', e.target.checked)}
+                className="w-4 h-4 rounded border-slate-600 bg-slate-800 text-blue-500"
+              />
+            </div>
+            <NumberInput
+              label="Simplify Tolerance"
+              value={settings.simplifyTolerance}
+              onChange={v => onUpdate('simplifyTolerance', v)}
+              min={0}
+              max={2}
+              step={0.01}
+              unit="mm"
+            />
+            <NumberInput
+              label="Min Segment"
+              value={settings.minSegmentLength}
+              onChange={v => onUpdate('minSegmentLength', v)}
+              min={0}
+              max={5}
+              step={0.1}
+              unit="mm"
+            />
+          </>
+        )}
       </CollapsibleSection>
 
       <CollapsibleSection id="ink" title="Ink" expandedSection={expandedSection} onToggle={toggle}>

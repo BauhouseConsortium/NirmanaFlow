@@ -50,6 +50,18 @@ export const VectorSettingsSchema = z.object({
   // Clipping
   clipToWorkArea: z.boolean().default(false),
 
+  // Path optimization (Clipper2 WASM)
+  optimizePaths: z.boolean().default(false),
+  simplifyTolerance: z.number().min(0).max(2).default(0.1),
+  mergeOverlapping: z.boolean().default(true),
+  minSegmentLength: z.number().min(0).max(5).default(0.5),
+
+  // Plotter optimization
+  plotterOptimize: z.boolean().default(true),
+  removeDuplicateLines: z.boolean().default(true),
+  mergeConnectedPaths: z.boolean().default(true),
+  optimizePathOrder: z.boolean().default(true),
+
   // Hardware
   controllerHost: z.string().url().default('http://192.168.0.248'),
 });
@@ -146,6 +158,14 @@ export function getFieldConstraints(key: keyof VectorSettings): { min?: number; 
     colorWell4Color: {},
     artefactThreshold: { min: 0, max: 10, step: 0.1 },
     clipToWorkArea: {},
+    optimizePaths: {},
+    simplifyTolerance: { min: 0, max: 2, step: 0.01 },
+    mergeOverlapping: {},
+    minSegmentLength: { min: 0, max: 5, step: 0.1 },
+    plotterOptimize: {},
+    removeDuplicateLines: {},
+    mergeConnectedPaths: {},
+    optimizePathOrder: {},
     controllerHost: {},
   };
   return constraints[key];

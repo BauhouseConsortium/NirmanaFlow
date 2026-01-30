@@ -176,6 +176,24 @@ export interface CodeNodeData extends NodeData {
   error?: string;
 }
 
+// Slicer node data type
+export interface SlicerNodeData extends NodeData {
+  extrudeHeight: number;
+  wallThickness: number;
+  layerHeight: number;
+  extractLayer: number;
+  infillPattern: 'lines' | 'grid' | 'triangles' | 'honeycomb' | 'gyroid' | 'concentric';
+  infillDensity: number;
+  infillAngle: number;
+  includeWalls: boolean;
+  includeInfill: boolean;
+  includeTravel: boolean;
+  isSlicing?: boolean;
+  sliceProgress?: number;
+  error?: string;
+  lastSliceHash?: string;
+}
+
 // Output node
 export interface OutputNodeData extends NodeData {
   // No additional data needed
@@ -200,6 +218,7 @@ export type FlowNodeData =
   | LSystemNodeData
   | PathNodeData
   | CodeNodeData
+  | SlicerNodeData
   | OutputNodeData;
 
 // Node categories for the palette
@@ -231,6 +250,10 @@ export const nodeCategories = {
     { type: 'lsystem', label: 'L-System', description: 'Lindenmayer system fractal patterns' },
     { type: 'code', label: 'Code', description: 'Custom JavaScript code to transform or generate paths' },
   ],
+  // Slicer disabled for now - may re-enable later
+  // slicer: [
+  //   { type: 'slicer', label: 'Slicer', description: '3D slicer infill patterns (lines, grid, honeycomb, gyroid)' },
+  // ],
 } as const;
 
 // Default values for each node type
@@ -321,5 +344,21 @@ for (const path of input) {
 return output;
 `,
   },
+  // Slicer disabled for now - may re-enable later
+  // slicer: {
+  //   label: 'Slicer',
+  //   extrudeHeight: 10,
+  //   wallThickness: 0.8,
+  //   layerHeight: 0.2,
+  //   extractLayer: -1,
+  //   infillPattern: 'grid',
+  //   infillDensity: 20,
+  //   infillAngle: 45,
+  //   includeWalls: true,
+  //   includeInfill: true,
+  //   includeTravel: false,
+  //   isSlicing: false,
+  //   sliceProgress: 0,
+  // },
   output: { label: 'Output' },
 };

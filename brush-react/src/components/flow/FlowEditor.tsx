@@ -29,6 +29,7 @@ import { AttractorNode } from './AttractorNode';
 import { LSystemNode } from './LSystemNode';
 import { PathNode } from './PathNode';
 import { CodeNode } from './CodeNode';
+// import { SlicerNode } from './SlicerNode'; // Disabled for now - may re-enable later
 import { CustomEdge } from './CustomEdge';
 import { NodePalette } from './NodePalette';
 import { GlyphEditor } from './GlyphEditor';
@@ -51,6 +52,7 @@ const nodeTypes = {
   lsystem: LSystemNode,
   path: PathNode,
   code: CodeNode,
+  // slicer: SlicerNode, // Disabled for now - may re-enable later
 };
 
 // Define custom edge types
@@ -200,6 +202,8 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeType = 'path';
       } else if (type === 'code') {
         nodeType = 'code';
+      } else if (type === 'slicer') {
+        nodeType = 'slicer';
       }
 
       const newNode: Node = {

@@ -17,6 +17,9 @@ importers:
       allotment:
         specifier: ^1.20.5
         version: 1.20.5(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
+      clipper2-wasm:
+        specifier: ^0.2.1
+        version: 0.2.1
       react:
         specifier: ^19.2.3
         version: 19.2.3
@@ -656,6 +659,9 @@ packages:
   '@types/d3-zoom@3.0.8':
     resolution: {integrity: sha512-iqMC4/YlFCSlO8+2Ii1GGGliCAY4XdeG748w5vQUbevlbDu0zSjH/+jojorQVBK/se0j6DUFNPBGSqD3YWYnDw==}
 
+  '@types/emscripten@1.41.5':
+    resolution: {integrity: sha512-cMQm7pxu6BxtHyqJ7mQZ2kXWV5SLmugybFdHCBbJ5eHzOo6VhBckEgAT3//rP5FwPHNPeEiq4SmQ5ucBwsOo4Q==}
+
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
 
@@ -817,6 +823,9 @@ packages:
 
   classnames@2.5.1:
     resolution: {integrity: sha512-saHYOzhIQs6wy2sVxTM6bUDsQO4F50V9RQ22qBpEdCW+I+/Wmke2HOl6lS6dTpdxVhb88/I6+Hs+438c3lfUow==}
+
+  clipper2-wasm@0.2.1:
+    resolution: {integrity: sha512-WXkKLsfLtB0952jVky77xgqCcNRa641aDZDtB0vmU6wiaUd45nb1aQpqz21JJMUg4uXkjAYPCOF3iH5lMfS9tw==}
 
   color-convert@2.0.1:
     resolution: {integrity: sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==}
@@ -1937,6 +1946,8 @@ snapshots:
       '@types/d3-interpolate': 3.0.4
       '@types/d3-selection': 3.0.11
 
+  '@types/emscripten@1.41.5': {}
+
   '@types/estree@1.0.8': {}
 
   '@types/json-schema@7.0.15': {}
@@ -2154,6 +2165,10 @@ snapshots:
   classcat@5.0.5: {}
 
   classnames@2.5.1: {}
+
+  clipper2-wasm@0.2.1:
+    dependencies:
+      '@types/emscripten': 1.41.5
 
   color-convert@2.0.1:
     dependencies:

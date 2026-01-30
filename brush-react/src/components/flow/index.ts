@@ -11,6 +11,7 @@ export { AttractorNode } from './AttractorNode';
 export { LSystemNode } from './LSystemNode';
 export { PathNode } from './PathNode';
 export { CodeNode } from './CodeNode';
+// export { SlicerNode } from './SlicerNode'; // Disabled for now - may re-enable later
 export { CodeEditorModal } from './CodeEditorModal';
 export { CustomEdge } from './CustomEdge';
 export { NodePalette } from './NodePalette';

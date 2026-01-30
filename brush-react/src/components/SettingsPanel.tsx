@@ -203,6 +203,63 @@ export function SettingsPanel({ settings, onUpdate, onReset }: SettingsPanelProp
         />
       </Section>
 
+      <Section title="Path Optimization (Clipper2)">
+        <div className="mb-3">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.optimizePaths}
+              onChange={e => onUpdate('optimizePaths', e.target.checked)}
+              className="w-4 h-4 rounded border-slate-600 bg-slate-800
+                         text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+            />
+            <span className="text-sm text-slate-300">Enable Path Optimization</span>
+          </label>
+          <p className="text-xs text-slate-500 mt-1 ml-6">
+            Uses Clipper2 WASM for boolean operations
+          </p>
+        </div>
+        {settings.optimizePaths && (
+          <>
+            <div className="mb-3">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={settings.mergeOverlapping}
+                  onChange={e => onUpdate('mergeOverlapping', e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-600 bg-slate-800
+                             text-blue-500 focus:ring-blue-500 focus:ring-offset-0"
+                />
+                <span className="text-sm text-slate-300">Merge Overlapping Paths</span>
+              </label>
+              <p className="text-xs text-slate-500 mt-1 ml-6">
+                Union closed paths that overlap
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <NumberInput
+                label="Simplify Tolerance"
+                value={settings.simplifyTolerance}
+                onChange={v => onUpdate('simplifyTolerance', v)}
+                min={0}
+                max={2}
+                step={0.01}
+                unit="mm"
+              />
+              <NumberInput
+                label="Min Segment Length"
+                value={settings.minSegmentLength}
+                onChange={v => onUpdate('minSegmentLength', v)}
+                min={0}
+                max={5}
+                step={0.1}
+                unit="mm"
+              />
+            </div>
+          </>
+        )}
+      </Section>
+
       <Section title="Hardware">
         <div>
           <label className="block text-xs text-slate-400 mb-1">Controller Host</label>
