@@ -265,6 +265,8 @@ interface HalftoneSettings {
   invert: boolean;
   flipX: boolean;
   flipY: boolean;
+  skipWhite: boolean;
+  whiteThreshold: number;
   outputWidth: number;
   outputHeight: number;
 }
@@ -436,6 +438,8 @@ function generateHalftonePattern(imageDataUrl: string, settings: HalftoneSetting
     invert,
     flipX,
     flipY,
+    skipWhite,
+    whiteThreshold,
     outputWidth,
     outputHeight,
   } = settings;
@@ -506,6 +510,16 @@ function generateHalftonePattern(imageDataUrl: string, settings: HalftoneSetting
       
       if (invert) {
         brightness = 1 - brightness;
+      }
+      
+      // Skip white/transparent areas if enabled
+      if (skipWhite && brightness >= whiteThreshold) {
+        // Break the current path segment when hitting white area
+        if (path.length > 1) {
+          paths.push([...path]);
+        }
+        path.length = 0;
+        continue;
       }
       
       // Map brightness to amplitude (dark = high amplitude, light = low amplitude)
@@ -1893,6 +1907,8 @@ export function executeFlowGraph(
           invert?: boolean;
           flipX?: boolean;
           flipY?: boolean;
+          skipWhite?: boolean;
+          whiteThreshold?: number;
           outputWidth?: number;
           outputHeight?: number;
         };
@@ -1909,6 +1925,8 @@ export function executeFlowGraph(
             invert: halftoneData.invert ?? false,
             flipX: halftoneData.flipX ?? false,
             flipY: halftoneData.flipY ?? true,
+            skipWhite: halftoneData.skipWhite ?? false,
+            whiteThreshold: halftoneData.whiteThreshold ?? 0.95,
             outputWidth: halftoneData.outputWidth ?? 100,
             outputHeight: halftoneData.outputHeight ?? 100,
           }),

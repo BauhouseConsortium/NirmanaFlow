@@ -13,6 +13,8 @@ interface HalftoneNodeData extends Record<string, unknown> {
   invert: boolean;
   flipX: boolean;
   flipY: boolean;
+  skipWhite: boolean;
+  whiteThreshold: number;
   outputWidth: number;
   outputHeight: number;
   color?: 1 | 2 | 3 | 4;
@@ -162,6 +164,8 @@ function HalftoneNodeComponent({ data, id }: HalftoneNodeProps) {
     invert = false,
     flipX = false,
     flipY = true,
+    skipWhite = false,
+    whiteThreshold = 0.95,
     outputWidth = 100,
     outputHeight = 100,
     color,
@@ -360,6 +364,36 @@ function HalftoneNodeComponent({ data, id }: HalftoneNodeProps) {
               />
             </button>
           </div>
+        </div>
+
+        {/* Skip white/transparent */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-xs text-slate-400">Skip White Areas</label>
+            <button
+              onClick={() => handleChange('skipWhite', !skipWhite)}
+              className={`nodrag w-10 h-5 rounded-full transition-colors ${
+                skipWhite ? 'bg-rose-500' : 'bg-slate-600'
+              }`}
+            >
+              <div
+                className={`w-4 h-4 rounded-full bg-white shadow transform transition-transform ${
+                  skipWhite ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          {skipWhite && (
+            <SliderField
+              label="White Threshold"
+              value={whiteThreshold}
+              min={0.5}
+              max={1}
+              step={0.01}
+              field="whiteThreshold"
+              onChange={handleChange}
+            />
+          )}
         </div>
       </div>
 

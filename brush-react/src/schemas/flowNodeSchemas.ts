@@ -205,6 +205,8 @@ export const HalftoneNodeDataSchema = BaseNodeDataSchema.extend({
   invert: z.boolean(),
   flipX: z.boolean(),
   flipY: z.boolean(),
+  skipWhite: z.boolean(),
+  whiteThreshold: z.number().min(0).max(1),
   outputWidth: z.number().min(10).max(500),
   outputHeight: z.number().min(10).max(500),
 });

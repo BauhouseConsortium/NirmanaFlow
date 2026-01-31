@@ -196,6 +196,8 @@ export interface HalftoneNodeData extends NodeData {
   invert: boolean;
   flipX: boolean;
   flipY: boolean;
+  skipWhite: boolean;
+  whiteThreshold: number;
   outputWidth: number;
   outputHeight: number;
 }
@@ -393,6 +395,8 @@ return output;
     invert: false,
     flipX: false,
     flipY: true,
+    skipWhite: false,
+    whiteThreshold: 0.95,
     outputWidth: 100,
     outputHeight: 100,
   },
