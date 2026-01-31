@@ -22,8 +22,8 @@ Visit [nirmanaflow.netlify.app](https://nirmanaflow.netlify.app) to design and e
 
 ```bash
 # Clone the repository
-git clone https://github.com/bauhouse/brush.git
-cd brush/brush-react
+git clone https://github.com/BauhouseConsortium/NirmanaFlow.git
+cd NirmanaFlow/brush-react
 
 # Install dependencies
 pnpm install

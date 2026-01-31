@@ -151,12 +151,12 @@ export function ConnectionHelpModal({ isOpen, onClose }: ConnectionHelpModalProp
               
               <div className="relative group">
                 <pre className="bg-slate-900 rounded-lg p-3 text-xs font-mono text-green-400 overflow-x-auto border border-slate-700">
-{`git clone https://github.com/bauhouse/brush.git
-cd brush/brush-react
+{`git clone https://github.com/BauhouseConsortium/NirmanaFlow.git
+cd NirmanaFlow/brush-react
 pnpm install`}
                 </pre>
                 <button
-                  onClick={() => copyToClipboard('git clone https://github.com/bauhouse/brush.git && cd brush/brush-react && pnpm install', 'dev')}
+                  onClick={() => copyToClipboard('git clone https://github.com/BauhouseConsortium/NirmanaFlow.git && cd NirmanaFlow/brush-react && pnpm install', 'dev')}
                   className={`absolute top-2 right-2 px-2 py-1 rounded text-xs font-medium transition-all ${
                     copied === 'dev'
                       ? 'bg-green-500/20 text-green-400'
