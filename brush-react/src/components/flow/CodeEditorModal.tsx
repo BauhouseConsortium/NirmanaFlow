@@ -79,6 +79,7 @@ const API_REFERENCE = `// ══════════════════
 export function CodeEditorModal({ isOpen, onClose, nodeId, initialCode }: CodeEditorModalProps) {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
   const [code, setCode] = useState(initialCode);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Sync code when modal opens with new initialCode
   useEffect(() => {
@@ -224,7 +225,11 @@ return output;`,
       />
 
       {/* Modal */}
-      <div className="relative bg-slate-900 rounded-xl shadow-2xl border border-slate-700 w-[900px] max-w-[95vw] h-[700px] max-h-[90vh] flex flex-col">
+      <div className={`relative bg-slate-900 shadow-2xl border border-slate-700 flex flex-col transition-all duration-200 ${
+        isFullscreen 
+          ? 'w-screen h-screen max-w-none max-h-none rounded-none' 
+          : 'w-[900px] max-w-[95vw] h-[700px] max-h-[90vh] rounded-xl'
+      }`}>
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-700">
           <div className="flex items-center gap-3">
@@ -234,9 +239,26 @@ return output;`,
           </div>
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500">Cmd/Ctrl+S to save</span>
+            {/* Fullscreen toggle */}
+            <button
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+              title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+            >
+              {isFullscreen ? (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 9L4 4m0 0v5m0-5h5M15 9l5-5m0 0v5m0-5h-5M9 15l-5 5m0 0v-5m0 5h5M15 15l5 5m0 0v-5m0 5h-5" />
+                </svg>
+              ) : (
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                </svg>
+              )}
+            </button>
             <button
               onClick={onClose}
               className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-700 rounded transition-colors"
+              title="Close"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
