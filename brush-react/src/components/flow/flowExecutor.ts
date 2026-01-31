@@ -545,6 +545,371 @@ function generateHalftonePattern(imageDataUrl: string, settings: HalftoneSetting
   return paths;
 }
 
+// ============ SVG Parsing ============
+
+interface SvgParseSettings {
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+/**
+ * Parse SVG content and extract paths
+ */
+function parseSvgContent(svgContent: string, settings: SvgParseSettings): Path[] {
+  const { scale, offsetX, offsetY } = settings;
+  const paths: Path[] = [];
+  
+  try {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+    const svg = doc.querySelector('svg');
+    
+    if (!svg) return [];
+    
+    // Get viewBox for coordinate transformation
+    const viewBox = svg.getAttribute('viewBox');
+    let viewBoxScale = 1;
+    if (viewBox) {
+      const parts = viewBox.split(/[\s,]+/).map(Number);
+      if (parts.length >= 4) {
+        // Use viewBox width to determine scale (assuming mm output)
+        const vbWidth = parts[2];
+        if (vbWidth > 0) {
+          viewBoxScale = 100 / vbWidth; // Scale to ~100mm
+        }
+      }
+    }
+    
+    const finalScale = scale * viewBoxScale;
+    
+    // Process all path elements
+    const pathElements = doc.querySelectorAll('path');
+    pathElements.forEach(pathEl => {
+      const d = pathEl.getAttribute('d');
+      if (d) {
+        const parsedPaths = parsePathData(d, finalScale, offsetX, offsetY);
+        paths.push(...parsedPaths);
+      }
+    });
+    
+    // Process rect elements
+    const rectElements = doc.querySelectorAll('rect');
+    rectElements.forEach(rect => {
+      const x = parseFloat(rect.getAttribute('x') || '0') * finalScale + offsetX;
+      const y = parseFloat(rect.getAttribute('y') || '0') * finalScale + offsetY;
+      const w = parseFloat(rect.getAttribute('width') || '0') * finalScale;
+      const h = parseFloat(rect.getAttribute('height') || '0') * finalScale;
+      
+      if (w > 0 && h > 0) {
+        paths.push([
+          [x, y], [x + w, y], [x + w, y + h], [x, y + h], [x, y]
+        ]);
+      }
+    });
+    
+    // Process circle elements
+    const circleElements = doc.querySelectorAll('circle');
+    circleElements.forEach(circle => {
+      const cx = parseFloat(circle.getAttribute('cx') || '0') * finalScale + offsetX;
+      const cy = parseFloat(circle.getAttribute('cy') || '0') * finalScale + offsetY;
+      const r = parseFloat(circle.getAttribute('r') || '0') * finalScale;
+      
+      if (r > 0) {
+        const circlePath: Point[] = [];
+        const segments = 48;
+        for (let i = 0; i <= segments; i++) {
+          const angle = (i / segments) * Math.PI * 2;
+          circlePath.push([cx + Math.cos(angle) * r, cy + Math.sin(angle) * r]);
+        }
+        paths.push(circlePath);
+      }
+    });
+    
+    // Process ellipse elements
+    const ellipseElements = doc.querySelectorAll('ellipse');
+    ellipseElements.forEach(ellipse => {
+      const cx = parseFloat(ellipse.getAttribute('cx') || '0') * finalScale + offsetX;
+      const cy = parseFloat(ellipse.getAttribute('cy') || '0') * finalScale + offsetY;
+      const rx = parseFloat(ellipse.getAttribute('rx') || '0') * finalScale;
+      const ry = parseFloat(ellipse.getAttribute('ry') || '0') * finalScale;
+      
+      if (rx > 0 && ry > 0) {
+        const ellipsePath: Point[] = [];
+        const segments = 48;
+        for (let i = 0; i <= segments; i++) {
+          const angle = (i / segments) * Math.PI * 2;
+          ellipsePath.push([cx + Math.cos(angle) * rx, cy + Math.sin(angle) * ry]);
+        }
+        paths.push(ellipsePath);
+      }
+    });
+    
+    // Process line elements
+    const lineElements = doc.querySelectorAll('line');
+    lineElements.forEach(line => {
+      const x1 = parseFloat(line.getAttribute('x1') || '0') * finalScale + offsetX;
+      const y1 = parseFloat(line.getAttribute('y1') || '0') * finalScale + offsetY;
+      const x2 = parseFloat(line.getAttribute('x2') || '0') * finalScale + offsetX;
+      const y2 = parseFloat(line.getAttribute('y2') || '0') * finalScale + offsetY;
+      paths.push([[x1, y1], [x2, y2]]);
+    });
+    
+    // Process polyline elements
+    const polylineElements = doc.querySelectorAll('polyline');
+    polylineElements.forEach(polyline => {
+      const points = polyline.getAttribute('points');
+      if (points) {
+        const polyPath = parsePoints(points, finalScale, offsetX, offsetY);
+        if (polyPath.length > 1) {
+          paths.push(polyPath);
+        }
+      }
+    });
+    
+    // Process polygon elements
+    const polygonElements = doc.querySelectorAll('polygon');
+    polygonElements.forEach(polygon => {
+      const points = polygon.getAttribute('points');
+      if (points) {
+        const polyPath = parsePoints(points, finalScale, offsetX, offsetY);
+        if (polyPath.length > 1) {
+          // Close the polygon
+          polyPath.push(polyPath[0]);
+          paths.push(polyPath);
+        }
+      }
+    });
+    
+  } catch (e) {
+    console.error('Error parsing SVG:', e);
+  }
+  
+  return paths;
+}
+
+/**
+ * Parse SVG path data (d attribute)
+ */
+function parsePathData(d: string, scale: number, offsetX: number, offsetY: number): Path[] {
+  const paths: Path[] = [];
+  let currentPath: Point[] = [];
+  let currentX = 0;
+  let currentY = 0;
+  let startX = 0;
+  let startY = 0;
+  
+  // Tokenize the path data
+  const commands = d.match(/[MmLlHhVvCcSsQqTtAaZz][^MmLlHhVvCcSsQqTtAaZz]*/g) || [];
+  
+  for (const cmd of commands) {
+    const type = cmd[0];
+    const args = cmd.slice(1).trim().split(/[\s,]+/).filter(s => s).map(Number);
+    
+    switch (type) {
+      case 'M': // Move to (absolute)
+        if (currentPath.length > 1) {
+          paths.push(currentPath);
+        }
+        currentPath = [];
+        currentX = args[0];
+        currentY = args[1];
+        startX = currentX;
+        startY = currentY;
+        currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        // Subsequent pairs are treated as line-to
+        for (let i = 2; i < args.length; i += 2) {
+          currentX = args[i];
+          currentY = args[i + 1];
+          currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        }
+        break;
+        
+      case 'm': // Move to (relative)
+        if (currentPath.length > 1) {
+          paths.push(currentPath);
+        }
+        currentPath = [];
+        currentX += args[0];
+        currentY += args[1];
+        startX = currentX;
+        startY = currentY;
+        currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        for (let i = 2; i < args.length; i += 2) {
+          currentX += args[i];
+          currentY += args[i + 1];
+          currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        }
+        break;
+        
+      case 'L': // Line to (absolute)
+        for (let i = 0; i < args.length; i += 2) {
+          currentX = args[i];
+          currentY = args[i + 1];
+          currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        }
+        break;
+        
+      case 'l': // Line to (relative)
+        for (let i = 0; i < args.length; i += 2) {
+          currentX += args[i];
+          currentY += args[i + 1];
+          currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        }
+        break;
+        
+      case 'H': // Horizontal line (absolute)
+        for (const x of args) {
+          currentX = x;
+          currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        }
+        break;
+        
+      case 'h': // Horizontal line (relative)
+        for (const dx of args) {
+          currentX += dx;
+          currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        }
+        break;
+        
+      case 'V': // Vertical line (absolute)
+        for (const y of args) {
+          currentY = y;
+          currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        }
+        break;
+        
+      case 'v': // Vertical line (relative)
+        for (const dy of args) {
+          currentY += dy;
+          currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        }
+        break;
+        
+      case 'C': // Cubic bezier (absolute)
+        for (let i = 0; i < args.length; i += 6) {
+          const cp1x = args[i], cp1y = args[i + 1];
+          const cp2x = args[i + 2], cp2y = args[i + 3];
+          const x = args[i + 4], y = args[i + 5];
+          
+          // Approximate bezier with line segments
+          const segments = 16;
+          for (let t = 1; t <= segments; t++) {
+            const tt = t / segments;
+            const px = bezierPoint(currentX, cp1x, cp2x, x, tt);
+            const py = bezierPoint(currentY, cp1y, cp2y, y, tt);
+            currentPath.push([px * scale + offsetX, py * scale + offsetY]);
+          }
+          currentX = x;
+          currentY = y;
+        }
+        break;
+        
+      case 'c': // Cubic bezier (relative)
+        for (let i = 0; i < args.length; i += 6) {
+          const cp1x = currentX + args[i], cp1y = currentY + args[i + 1];
+          const cp2x = currentX + args[i + 2], cp2y = currentY + args[i + 3];
+          const x = currentX + args[i + 4], y = currentY + args[i + 5];
+          
+          const segments = 16;
+          for (let t = 1; t <= segments; t++) {
+            const tt = t / segments;
+            const px = bezierPoint(currentX, cp1x, cp2x, x, tt);
+            const py = bezierPoint(currentY, cp1y, cp2y, y, tt);
+            currentPath.push([px * scale + offsetX, py * scale + offsetY]);
+          }
+          currentX = x;
+          currentY = y;
+        }
+        break;
+        
+      case 'Q': // Quadratic bezier (absolute)
+        for (let i = 0; i < args.length; i += 4) {
+          const cpx = args[i], cpy = args[i + 1];
+          const x = args[i + 2], y = args[i + 3];
+          
+          const segments = 12;
+          for (let t = 1; t <= segments; t++) {
+            const tt = t / segments;
+            const px = quadBezierPoint(currentX, cpx, x, tt);
+            const py = quadBezierPoint(currentY, cpy, y, tt);
+            currentPath.push([px * scale + offsetX, py * scale + offsetY]);
+          }
+          currentX = x;
+          currentY = y;
+        }
+        break;
+        
+      case 'q': // Quadratic bezier (relative)
+        for (let i = 0; i < args.length; i += 4) {
+          const cpx = currentX + args[i], cpy = currentY + args[i + 1];
+          const x = currentX + args[i + 2], y = currentY + args[i + 3];
+          
+          const segments = 12;
+          for (let t = 1; t <= segments; t++) {
+            const tt = t / segments;
+            const px = quadBezierPoint(currentX, cpx, x, tt);
+            const py = quadBezierPoint(currentY, cpy, y, tt);
+            currentPath.push([px * scale + offsetX, py * scale + offsetY]);
+          }
+          currentX = x;
+          currentY = y;
+        }
+        break;
+        
+      case 'Z':
+      case 'z': // Close path
+        currentX = startX;
+        currentY = startY;
+        currentPath.push([currentX * scale + offsetX, currentY * scale + offsetY]);
+        if (currentPath.length > 1) {
+          paths.push(currentPath);
+        }
+        currentPath = [];
+        break;
+    }
+  }
+  
+  // Don't forget remaining path
+  if (currentPath.length > 1) {
+    paths.push(currentPath);
+  }
+  
+  return paths;
+}
+
+/**
+ * Parse SVG points attribute (for polyline/polygon)
+ */
+function parsePoints(pointsStr: string, scale: number, offsetX: number, offsetY: number): Point[] {
+  const points: Point[] = [];
+  const coords = pointsStr.trim().split(/[\s,]+/).map(Number);
+  
+  for (let i = 0; i < coords.length; i += 2) {
+    if (i + 1 < coords.length) {
+      points.push([coords[i] * scale + offsetX, coords[i + 1] * scale + offsetY]);
+    }
+  }
+  
+  return points;
+}
+
+/**
+ * Cubic bezier point calculation
+ */
+function bezierPoint(p0: number, p1: number, p2: number, p3: number, t: number): number {
+  const mt = 1 - t;
+  return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
+}
+
+/**
+ * Quadratic bezier point calculation
+ */
+function quadBezierPoint(p0: number, p1: number, p2: number, t: number): number {
+  const mt = 1 - t;
+  return mt * mt * p0 + 2 * mt * t * p1 + t * t * p2;
+}
+
 // ============ Mask Application ============
 
 interface MaskSettings {
@@ -2075,6 +2440,23 @@ export function executeFlowGraph(
           detail: { nodeId: node.id, field: 'error', value: undefined },
         });
         window.dispatchEvent(event);
+      }
+    } else if (node.type === 'svg') {
+      // SVG node parses SVG content and converts to paths
+      const svgData = nodeData as {
+        svgContent?: string;
+        scale?: number;
+        offsetX?: number;
+        offsetY?: number;
+      };
+      
+      if (svgData.svgContent) {
+        const svgPaths = parseSvgContent(svgData.svgContent, {
+          scale: svgData.scale ?? 1,
+          offsetX: svgData.offsetX ?? 0,
+          offsetY: svgData.offsetY ?? 0,
+        });
+        paths = toColoredPaths(svgPaths, nodeColor);
       }
     } else if (node.type === 'image') {
       // Image nodes don't generate paths directly - they just store image data

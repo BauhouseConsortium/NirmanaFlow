@@ -11,6 +11,7 @@ export { AttractorNode } from './AttractorNode';
 export { LSystemNode } from './LSystemNode';
 export { PathNode } from './PathNode';
 export { CodeNode } from './CodeNode';
+export { SvgNode } from './SvgNode';
 export { ImageNode } from './ImageNode';
 export { HalftoneNode } from './HalftoneNode';
 export { AsciiNode } from './AsciiNode';

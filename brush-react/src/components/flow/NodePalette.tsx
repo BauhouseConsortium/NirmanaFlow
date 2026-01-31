@@ -30,6 +30,7 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
       attractor: '∞',
       lsystem: '🌿',
       code: '</>',
+      svg: '◇',
       image: '🖼️',
       halftone: '∿',
       ascii: 'Aa',

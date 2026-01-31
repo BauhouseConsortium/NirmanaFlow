@@ -176,6 +176,15 @@ export interface CodeNodeData extends NodeData {
   error?: string;
 }
 
+// SVG node data type
+export interface SvgNodeData extends NodeData {
+  svgContent?: string;
+  filename?: string;
+  scale: number;
+  offsetX: number;
+  offsetY: number;
+}
+
 // Image node data type
 export interface ImageNodeData extends NodeData {
   imageData?: string; // base64 data URL
@@ -264,6 +273,7 @@ export type FlowNodeData =
   | LSystemNodeData
   | PathNodeData
   | CodeNodeData
+  | SvgNodeData
   | ImageNodeData
   | HalftoneNodeData
   | AsciiNodeData
@@ -301,6 +311,7 @@ export const nodeCategories = {
     { type: 'code', label: 'Code', description: 'Custom JavaScript code to transform or generate paths' },
   ],
   image: [
+    { type: 'svg', label: 'SVG', description: 'Load SVG file as vector paths' },
     { type: 'image', label: 'Image', description: 'Load an image for processing' },
     { type: 'halftone', label: 'Halftone', description: 'Sinusoidal line halftone pattern from image' },
     { type: 'ascii', label: 'ASCII', description: 'Convert image to ASCII art pattern' },
@@ -399,6 +410,14 @@ for (const path of input) {
 }
 return output;
 `,
+  },
+  svg: {
+    label: 'SVG',
+    svgContent: undefined,
+    filename: undefined,
+    scale: 1,
+    offsetX: 0,
+    offsetY: 0,
   },
   image: {
     label: 'Image',

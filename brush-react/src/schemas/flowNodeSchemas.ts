@@ -183,6 +183,16 @@ export const CodeNodeDataSchema = BaseNodeDataSchema.extend({
   error: z.string().optional(),
 });
 
+// ============ SVG Node ============
+
+export const SvgNodeDataSchema = BaseNodeDataSchema.extend({
+  svgContent: z.string().optional(),
+  filename: z.string().optional(),
+  scale: z.number().min(0.1).max(10),
+  offsetX: z.number(),
+  offsetY: z.number(),
+});
+
 // ============ Image Node ============
 
 export const ImageNodeDataSchema = BaseNodeDataSchema.extend({
@@ -284,6 +294,7 @@ export const nodeSchemaMap = {
   attractor: AttractorNodeDataSchema,
   lsystem: LSystemNodeDataSchema,
   code: CodeNodeDataSchema,
+  svg: SvgNodeDataSchema,
   image: ImageNodeDataSchema,
   halftone: HalftoneNodeDataSchema,
   ascii: AsciiNodeDataSchema,
@@ -314,6 +325,7 @@ export type AlgorithmicNodeData = z.infer<typeof AlgorithmicNodeDataSchema>;
 export type AttractorNodeData = z.infer<typeof AttractorNodeDataSchema>;
 export type LSystemNodeData = z.infer<typeof LSystemNodeDataSchema>;
 export type CodeNodeData = z.infer<typeof CodeNodeDataSchema>;
+export type SvgNodeData = z.infer<typeof SvgNodeDataSchema>;
 export type ImageNodeData = z.infer<typeof ImageNodeDataSchema>;
 export type HalftoneNodeData = z.infer<typeof HalftoneNodeDataSchema>;
 export type AsciiNodeData = z.infer<typeof AsciiNodeDataSchema>;
@@ -342,6 +354,7 @@ export type FlowNodeData =
   | AttractorNodeData
   | LSystemNodeData
   | CodeNodeData
+  | SvgNodeData
   | ImageNodeData
   | HalftoneNodeData
   | AsciiNodeData

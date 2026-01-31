@@ -29,6 +29,7 @@ import { AttractorNode } from './AttractorNode';
 import { LSystemNode } from './LSystemNode';
 import { PathNode } from './PathNode';
 import { CodeNode } from './CodeNode';
+import { SvgNode } from './SvgNode';
 import { ImageNode } from './ImageNode';
 import { HalftoneNode } from './HalftoneNode';
 import { AsciiNode } from './AsciiNode';
@@ -56,6 +57,7 @@ const nodeTypes = {
   lsystem: LSystemNode,
   path: PathNode,
   code: CodeNode,
+  svg: SvgNode,
   image: ImageNode,
   halftone: HalftoneNode,
   ascii: AsciiNode,
@@ -210,6 +212,8 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeType = 'path';
       } else if (type === 'code') {
         nodeType = 'code';
+      } else if (type === 'svg') {
+        nodeType = 'svg';
       } else if (type === 'image') {
         nodeType = 'image';
       } else if (type === 'halftone') {
