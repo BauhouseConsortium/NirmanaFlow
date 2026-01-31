@@ -13,6 +13,7 @@ export { PathNode } from './PathNode';
 export { CodeNode } from './CodeNode';
 export { ImageNode } from './ImageNode';
 export { HalftoneNode } from './HalftoneNode';
+export { AsciiNode } from './AsciiNode';
 // export { SlicerNode } from './SlicerNode'; // Disabled for now - may re-enable later
 export { CodeEditorModal } from './CodeEditorModal';
 export { CustomEdge } from './CustomEdge';

@@ -545,6 +545,101 @@ function generateHalftonePattern(imageDataUrl: string, settings: HalftoneSetting
   return paths;
 }
 
+// ============ ASCII Art Pattern Generation ============
+
+interface AsciiSettings {
+  charset: string;
+  cellWidth: number;
+  cellHeight: number;
+  fontSize: number;
+  outputWidth: number;
+  outputHeight: number;
+  invert: boolean;
+  flipX: boolean;
+  flipY: boolean;
+}
+
+/**
+ * Generate ASCII art pattern from image
+ * Each cell of the image is converted to an ASCII character based on brightness
+ */
+function generateAsciiPattern(imageDataUrl: string, settings: AsciiSettings): Path[] {
+  const {
+    charset,
+    cellWidth,
+    cellHeight,
+    fontSize,
+    outputWidth,
+    outputHeight,
+    invert,
+    flipX,
+    flipY,
+  } = settings;
+  
+  if (!charset || charset.length === 0) {
+    return [];
+  }
+  
+  // Calculate grid dimensions
+  const cols = Math.floor(outputWidth / cellWidth);
+  const rows = Math.floor(outputHeight / cellHeight);
+  
+  if (cols <= 0 || rows <= 0) {
+    return [];
+  }
+  
+  // Load image at grid resolution
+  const imageData = loadImageData(imageDataUrl, cols, rows);
+  if (!imageData) {
+    return [];
+  }
+  
+  const paths: Path[] = [];
+  
+  // Process each cell
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      // Get brightness at this cell
+      const sampleX = flipX ? (cols - 1 - col) : col;
+      const sampleY = flipY ? (rows - 1 - row) : row;
+      let brightness = getBrightness(imageData, sampleX, sampleY);
+      
+      if (invert) {
+        brightness = 1 - brightness;
+      }
+      
+      // Map brightness to character index
+      // Brightness 1 (white) -> first char (lightest), Brightness 0 (black) -> last char (darkest)
+      const charIndex = Math.min(
+        charset.length - 1,
+        Math.floor((1 - brightness) * charset.length)
+      );
+      const char = charset[charIndex];
+      
+      // Skip space characters (no drawing needed)
+      if (char === ' ') {
+        continue;
+      }
+      
+      // Calculate position for this cell
+      const x = col * cellWidth + cellWidth / 2;
+      const y = row * cellHeight + cellHeight / 2;
+      
+      // Render character as paths using stroke font
+      const charPaths = renderText(char, {
+        x: x - fontSize / 2,
+        y: y - fontSize / 2,
+        size: fontSize,
+        spacing: 1,
+      });
+      
+      paths.push(...charPaths);
+    }
+  }
+  
+  return paths;
+}
+
 // Get all source nodes that connect to a target node
 function getSourceNodes(targetId: string, nodes: Node[], edges: Edge[]): Node[] {
   const incomingEdges = edges.filter((e) => e.target === targetId);
@@ -1929,6 +2024,45 @@ export function executeFlowGraph(
             whiteThreshold: halftoneData.whiteThreshold ?? 0.95,
             outputWidth: halftoneData.outputWidth ?? 100,
             outputHeight: halftoneData.outputHeight ?? 100,
+          }),
+          nodeColor
+        );
+      }
+    } else if (node.type === 'ascii') {
+      // ASCII node converts image to ASCII art using stroke font
+      let imageData: string | undefined;
+      for (const source of sourceNodes) {
+        const sourceData = nodes.find(n => n.id === source.id)?.data as Record<string, unknown>;
+        if (sourceData?.imageData) {
+          imageData = sourceData.imageData as string;
+          break;
+        }
+      }
+      
+      if (imageData) {
+        const asciiData = nodeData as {
+          charset?: string;
+          cellWidth?: number;
+          cellHeight?: number;
+          fontSize?: number;
+          outputWidth?: number;
+          outputHeight?: number;
+          invert?: boolean;
+          flipX?: boolean;
+          flipY?: boolean;
+        };
+        
+        paths = toColoredPaths(
+          generateAsciiPattern(imageData, {
+            charset: asciiData.charset ?? ' .:-=+*#%@',
+            cellWidth: asciiData.cellWidth ?? 3,
+            cellHeight: asciiData.cellHeight ?? 4,
+            fontSize: asciiData.fontSize ?? 3,
+            outputWidth: asciiData.outputWidth ?? 100,
+            outputHeight: asciiData.outputHeight ?? 100,
+            invert: asciiData.invert ?? false,
+            flipX: asciiData.flipX ?? false,
+            flipY: asciiData.flipY ?? true,
           }),
           nodeColor
         );

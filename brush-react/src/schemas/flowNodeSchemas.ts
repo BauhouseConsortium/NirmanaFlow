@@ -211,6 +211,20 @@ export const HalftoneNodeDataSchema = BaseNodeDataSchema.extend({
   outputHeight: z.number().min(10).max(500),
 });
 
+// ============ ASCII Node ============
+
+export const AsciiNodeDataSchema = BaseNodeDataSchema.extend({
+  charset: z.string().min(1),
+  cellWidth: z.number().min(0.5).max(20),
+  cellHeight: z.number().min(0.5).max(30),
+  fontSize: z.number().min(0.5).max(20),
+  outputWidth: z.number().min(10).max(500),
+  outputHeight: z.number().min(10).max(500),
+  invert: z.boolean(),
+  flipX: z.boolean(),
+  flipY: z.boolean(),
+});
+
 // ============ Slicer Node ============
 
 export const SlicerNodeDataSchema = BaseNodeDataSchema.extend({
@@ -264,6 +278,7 @@ export const nodeSchemaMap = {
   code: CodeNodeDataSchema,
   image: ImageNodeDataSchema,
   halftone: HalftoneNodeDataSchema,
+  ascii: AsciiNodeDataSchema,
   slicer: SlicerNodeDataSchema,
   output: OutputNodeDataSchema,
 } as const;
@@ -292,6 +307,7 @@ export type LSystemNodeData = z.infer<typeof LSystemNodeDataSchema>;
 export type CodeNodeData = z.infer<typeof CodeNodeDataSchema>;
 export type ImageNodeData = z.infer<typeof ImageNodeDataSchema>;
 export type HalftoneNodeData = z.infer<typeof HalftoneNodeDataSchema>;
+export type AsciiNodeData = z.infer<typeof AsciiNodeDataSchema>;
 export type SlicerNodeData = z.infer<typeof SlicerNodeDataSchema>;
 export type OutputNodeData = z.infer<typeof OutputNodeDataSchema>;
 
@@ -318,6 +334,7 @@ export type FlowNodeData =
   | CodeNodeData
   | ImageNodeData
   | HalftoneNodeData
+  | AsciiNodeData
   | SlicerNodeData
   | OutputNodeData;
 

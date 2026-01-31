@@ -202,6 +202,19 @@ export interface HalftoneNodeData extends NodeData {
   outputHeight: number;
 }
 
+// ASCII node data type
+export interface AsciiNodeData extends NodeData {
+  charset: string;
+  cellWidth: number;
+  cellHeight: number;
+  fontSize: number;
+  outputWidth: number;
+  outputHeight: number;
+  invert: boolean;
+  flipX: boolean;
+  flipY: boolean;
+}
+
 // Slicer node data type
 export interface SlicerNodeData extends NodeData {
   extrudeHeight: number;
@@ -246,6 +259,7 @@ export type FlowNodeData =
   | CodeNodeData
   | ImageNodeData
   | HalftoneNodeData
+  | AsciiNodeData
   | SlicerNodeData
   | OutputNodeData;
 
@@ -281,6 +295,7 @@ export const nodeCategories = {
   image: [
     { type: 'image', label: 'Image', description: 'Load an image for processing' },
     { type: 'halftone', label: 'Halftone', description: 'Sinusoidal line halftone pattern from image' },
+    { type: 'ascii', label: 'ASCII', description: 'Convert image to ASCII art pattern' },
   ],
   // Slicer disabled for now - may re-enable later
   // slicer: [
@@ -399,6 +414,18 @@ return output;
     whiteThreshold: 0.95,
     outputWidth: 100,
     outputHeight: 100,
+  },
+  ascii: {
+    label: 'ASCII',
+    charset: ' .:-=+*#%@',
+    cellWidth: 3,
+    cellHeight: 4,
+    fontSize: 3,
+    outputWidth: 100,
+    outputHeight: 100,
+    invert: false,
+    flipX: false,
+    flipY: true,
   },
   // Slicer disabled for now - may re-enable later
   // slicer: {
