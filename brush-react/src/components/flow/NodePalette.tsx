@@ -33,6 +33,7 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
       image: '🖼️',
       halftone: '∿',
       ascii: 'Aa',
+      mask: '◐',
       // slicer: '⬢', // Disabled for now
     };
     return icons[type] || '•';

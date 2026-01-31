@@ -545,6 +545,110 @@ function generateHalftonePattern(imageDataUrl: string, settings: HalftoneSetting
   return paths;
 }
 
+// ============ Mask Application ============
+
+interface MaskSettings {
+  threshold: number;
+  invert: boolean;
+  feather: number;
+  maskWidth: number;
+  maskHeight: number;
+}
+
+/**
+ * Apply a B&W image mask to clip paths
+ * White areas (brightness > threshold) = keep paths
+ * Black areas (brightness < threshold) = remove paths
+ */
+function applyMask(inputPaths: ColoredPath[], maskImageUrl: string, settings: MaskSettings): ColoredPath[] {
+  const { threshold, invert, feather, maskWidth, maskHeight } = settings;
+  
+  // Determine mask sample resolution (higher = more accurate but slower)
+  const sampleRes = Math.max(100, Math.min(300, Math.max(maskWidth, maskHeight)));
+  
+  const imageData = loadImageData(maskImageUrl, sampleRes, sampleRes);
+  if (!imageData) {
+    return inputPaths; // No mask data, pass through
+  }
+  
+  const result: ColoredPath[] = [];
+  
+  // Calculate bounds of all input paths to determine mapping
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const coloredPath of inputPaths) {
+    for (const point of coloredPath.points) {
+      minX = Math.min(minX, point[0]);
+      minY = Math.min(minY, point[1]);
+      maxX = Math.max(maxX, point[0]);
+      maxY = Math.max(maxY, point[1]);
+    }
+  }
+  
+  const pathWidth = maxX - minX || 1;
+  const pathHeight = maxY - minY || 1;
+  
+  // Helper to check if a point is inside the mask
+  const isInsideMask = (x: number, y: number): boolean => {
+    // Map path coordinates to mask coordinates
+    const normalizedX = (x - minX) / pathWidth;
+    const normalizedY = (y - minY) / pathHeight;
+    
+    // Handle feathering by expanding sample area
+    const sampleX = normalizedX * (sampleRes - 1);
+    const sampleY = normalizedY * (sampleRes - 1);
+    
+    let brightness = getBrightness(imageData, sampleX, sampleY);
+    
+    // Apply feathering (simple box blur approximation)
+    if (feather > 0) {
+      const samples = 5;
+      let total = brightness;
+      const featherNorm = (feather / Math.max(pathWidth, pathHeight)) * sampleRes;
+      
+      for (let i = 1; i < samples; i++) {
+        const angle = (i / samples) * Math.PI * 2;
+        const fx = sampleX + Math.cos(angle) * featherNorm;
+        const fy = sampleY + Math.sin(angle) * featherNorm;
+        total += getBrightness(imageData, fx, fy);
+      }
+      brightness = total / samples;
+    }
+    
+    const inside = brightness > threshold;
+    return invert ? !inside : inside;
+  };
+  
+  // Process each path
+  for (const coloredPath of inputPaths) {
+    const points = coloredPath.points;
+    let currentSegment: Point[] = [];
+    
+    for (let i = 0; i < points.length; i++) {
+      const point = points[i];
+      const inside = isInsideMask(point[0], point[1]);
+      
+      if (inside) {
+        // Point is inside mask, add to current segment
+        currentSegment.push(point);
+      } else {
+        // Point is outside mask
+        if (currentSegment.length > 1) {
+          // Save current segment and start new one
+          result.push({ points: [...currentSegment], color: coloredPath.color });
+        }
+        currentSegment = [];
+      }
+    }
+    
+    // Don't forget the last segment
+    if (currentSegment.length > 1) {
+      result.push({ points: currentSegment, color: coloredPath.color });
+    }
+  }
+  
+  return result;
+}
+
 // ============ ASCII Art Pattern Generation ============
 
 interface AsciiSettings {
@@ -2027,6 +2131,50 @@ export function executeFlowGraph(
           }),
           nodeColor
         );
+      }
+    } else if (node.type === 'mask') {
+      // Mask node clips paths using a B&W image as mask
+      // Find connected image node (for mask) and path nodes
+      let maskImageData: string | undefined;
+      let inputPaths: ColoredPath[] = [];
+      let maskWidth: number | undefined;
+      let maskHeight: number | undefined;
+      
+      for (const source of sourceNodes) {
+        const sourceData = nodes.find(n => n.id === source.id)?.data as Record<string, unknown>;
+        if (sourceData?.imageData) {
+          // This is an image node - use as mask
+          maskImageData = sourceData.imageData as string;
+          maskWidth = sourceData.width as number | undefined;
+          maskHeight = sourceData.height as number | undefined;
+        } else {
+          // This is a path source - collect paths
+          inputPaths.push(...getNodePaths(source.id));
+        }
+      }
+      
+      if (maskImageData && inputPaths.length > 0) {
+        const maskData = nodeData as {
+          threshold?: number;
+          invert?: boolean;
+          feather?: number;
+        };
+        
+        paths = applyMask(inputPaths, maskImageData, {
+          threshold: maskData.threshold ?? 0.5,
+          invert: maskData.invert ?? false,
+          feather: maskData.feather ?? 0,
+          maskWidth: maskWidth ?? 100,
+          maskHeight: maskHeight ?? 100,
+        });
+        
+        // Apply color if set
+        if (nodeColor) {
+          paths = paths.map(p => ({ ...p, colorIndex: nodeColor }));
+        }
+      } else if (inputPaths.length > 0) {
+        // No mask connected, pass through
+        paths = inputPaths;
       }
     } else if (node.type === 'ascii') {
       // ASCII node converts image to ASCII art using stroke font

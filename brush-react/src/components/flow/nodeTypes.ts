@@ -202,6 +202,13 @@ export interface HalftoneNodeData extends NodeData {
   outputHeight: number;
 }
 
+// Mask node data type
+export interface MaskNodeData extends NodeData {
+  threshold: number;
+  invert: boolean;
+  feather: number;
+}
+
 // ASCII node data type
 export interface AsciiNodeData extends NodeData {
   charset: string;
@@ -260,6 +267,7 @@ export type FlowNodeData =
   | ImageNodeData
   | HalftoneNodeData
   | AsciiNodeData
+  | MaskNodeData
   | SlicerNodeData
   | OutputNodeData;
 
@@ -296,6 +304,7 @@ export const nodeCategories = {
     { type: 'image', label: 'Image', description: 'Load an image for processing' },
     { type: 'halftone', label: 'Halftone', description: 'Sinusoidal line halftone pattern from image' },
     { type: 'ascii', label: 'ASCII', description: 'Convert image to ASCII art pattern' },
+    { type: 'mask', label: 'Mask', description: 'Clip paths using B&W image as mask' },
   ],
   // Slicer disabled for now - may re-enable later
   // slicer: [
@@ -426,6 +435,12 @@ return output;
     invert: false,
     flipX: false,
     flipY: true,
+  },
+  mask: {
+    label: 'Mask',
+    threshold: 0.5,
+    invert: false,
+    feather: 0,
   },
   // Slicer disabled for now - may re-enable later
   // slicer: {

@@ -32,6 +32,7 @@ import { CodeNode } from './CodeNode';
 import { ImageNode } from './ImageNode';
 import { HalftoneNode } from './HalftoneNode';
 import { AsciiNode } from './AsciiNode';
+import { MaskNode } from './MaskNode';
 // import { SlicerNode } from './SlicerNode'; // Disabled for now - may re-enable later
 import { CustomEdge } from './CustomEdge';
 import { NodePalette } from './NodePalette';
@@ -58,6 +59,7 @@ const nodeTypes = {
   image: ImageNode,
   halftone: HalftoneNode,
   ascii: AsciiNode,
+  mask: MaskNode,
   // slicer: SlicerNode, // Disabled for now - may re-enable later
 };
 
@@ -214,6 +216,8 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeType = 'halftone';
       } else if (type === 'ascii') {
         nodeType = 'ascii';
+      } else if (type === 'mask') {
+        nodeType = 'mask';
       } else if (type === 'slicer') {
         nodeType = 'slicer';
       }

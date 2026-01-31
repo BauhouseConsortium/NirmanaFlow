@@ -211,6 +211,14 @@ export const HalftoneNodeDataSchema = BaseNodeDataSchema.extend({
   outputHeight: z.number().min(10).max(500),
 });
 
+// ============ Mask Node ============
+
+export const MaskNodeDataSchema = BaseNodeDataSchema.extend({
+  threshold: z.number().min(0).max(1),
+  invert: z.boolean(),
+  feather: z.number().min(0).max(20),
+});
+
 // ============ ASCII Node ============
 
 export const AsciiNodeDataSchema = BaseNodeDataSchema.extend({
@@ -279,6 +287,7 @@ export const nodeSchemaMap = {
   image: ImageNodeDataSchema,
   halftone: HalftoneNodeDataSchema,
   ascii: AsciiNodeDataSchema,
+  mask: MaskNodeDataSchema,
   slicer: SlicerNodeDataSchema,
   output: OutputNodeDataSchema,
 } as const;
@@ -308,6 +317,7 @@ export type CodeNodeData = z.infer<typeof CodeNodeDataSchema>;
 export type ImageNodeData = z.infer<typeof ImageNodeDataSchema>;
 export type HalftoneNodeData = z.infer<typeof HalftoneNodeDataSchema>;
 export type AsciiNodeData = z.infer<typeof AsciiNodeDataSchema>;
+export type MaskNodeData = z.infer<typeof MaskNodeDataSchema>;
 export type SlicerNodeData = z.infer<typeof SlicerNodeDataSchema>;
 export type OutputNodeData = z.infer<typeof OutputNodeDataSchema>;
 
@@ -335,6 +345,7 @@ export type FlowNodeData =
   | ImageNodeData
   | HalftoneNodeData
   | AsciiNodeData
+  | MaskNodeData
   | SlicerNodeData
   | OutputNodeData;
 
