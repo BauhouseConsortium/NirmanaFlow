@@ -781,13 +781,11 @@ async function sliceWithCura(
 // ============ Helper Functions ============
 
 /**
- * Create a composite polygon from closed paths for clipping
- * Uses the largest (by area) closed path as the clipping boundary
- * Falls back to bounding box if no closed paths found
+ * Extract all closed polygons from paths
+ * Returns array of polygons (each with sufficient area)
  */
-function createClippingPolygon(paths: Path[], useBoundingBoxFallback: boolean = true): Point[] | null {
-  let bestPolygon: Point[] | null = null;
-  let bestArea = 0;
+function extractClosedPolygons(paths: Path[], minArea: number = 1): Point[][] {
+  const polygons: Point[][] = [];
   
   for (const path of paths) {
     if (path.length < 3) continue;
@@ -799,9 +797,13 @@ function createClippingPolygon(paths: Path[], useBoundingBoxFallback: boolean = 
     const dy = Math.abs(first[1] - last[1]);
     const isClosed = dx < 0.1 && dy < 0.1;
     
+    if (!isClosed) continue;
+    
+    // Remove duplicate closing point
+    const pts = path.slice(0, -1);
+    
     // Calculate area using shoelace formula
     let area = 0;
-    const pts = isClosed ? path.slice(0, -1) : path;
     for (let i = 0; i < pts.length; i++) {
       const j = (i + 1) % pts.length;
       area += pts[i][0] * pts[j][1];
@@ -809,19 +811,52 @@ function createClippingPolygon(paths: Path[], useBoundingBoxFallback: boolean = 
     }
     area = Math.abs(area) / 2;
     
-    if (area > bestArea) {
-      bestArea = area;
-      bestPolygon = pts;
+    if (area >= minArea) {
+      polygons.push(pts);
     }
   }
   
+  return polygons;
+}
+
+/**
+ * Create a composite polygon from closed paths for clipping
+ * Uses the largest (by area) closed path as the clipping boundary
+ * Falls back to bounding box if no closed paths found
+ */
+function createClippingPolygon(paths: Path[], useBoundingBoxFallback: boolean = true): Point[] | null {
+  const polygons = extractClosedPolygons(paths);
+  
+  if (polygons.length > 0) {
+    // Return the largest polygon
+    let bestPolygon: Point[] | null = null;
+    let bestArea = 0;
+    
+    for (const pts of polygons) {
+      let area = 0;
+      for (let i = 0; i < pts.length; i++) {
+        const j = (i + 1) % pts.length;
+        area += pts[i][0] * pts[j][1];
+        area -= pts[j][0] * pts[i][1];
+      }
+      area = Math.abs(area) / 2;
+      
+      if (area > bestArea) {
+        bestArea = area;
+        bestPolygon = pts;
+      }
+    }
+    
+    return bestPolygon;
+  }
+  
   // Fallback: create bounding box polygon for open paths (like text)
-  if (!bestPolygon && useBoundingBoxFallback && paths.length > 0) {
+  if (useBoundingBoxFallback && paths.length > 0) {
     const bounds = getPathsBounds(paths);
     if (bounds.width > 0 && bounds.height > 0) {
       // Add small padding
       const pad = Math.min(bounds.width, bounds.height) * 0.05;
-      bestPolygon = [
+      return [
         [bounds.minX - pad, bounds.minY - pad],
         [bounds.maxX + pad, bounds.minY - pad],
         [bounds.maxX + pad, bounds.maxY + pad],
@@ -830,7 +865,23 @@ function createClippingPolygon(paths: Path[], useBoundingBoxFallback: boolean = 
     }
   }
   
-  return bestPolygon;
+  return null;
+}
+
+/**
+ * Get bounds for a single polygon
+ */
+function getPolygonBounds(polygon: Point[]): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  
+  for (const [x, y] of polygon) {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x);
+    maxY = Math.max(maxY, y);
+  }
+  
+  return { minX, minY, maxX, maxY };
 }
 
 // ============ Main Slicer Function ============
@@ -891,9 +942,6 @@ export async function slicePaths(
     message: 'Generating infill pattern...',
   });
   
-  // Create clipping polygon from input paths
-  const clipPolygon = createClippingPolygon(inputPaths);
-  
   const outputPaths: Path[] = [];
   
   // Include original paths as perimeters if enabled
@@ -903,32 +951,69 @@ export async function slicePaths(
   
   // Generate infill if enabled
   if (settings.includeInfill && settings.infillDensity > 0) {
-    onProgress?.({
-      stage: 'slicing',
-      progress: 50,
-      message: `Generating ${settings.infillPattern} pattern...`,
-    });
+    // Extract all closed polygons from input
+    const polygons = extractClosedPolygons(inputPaths);
     
-    // Generate infill pattern within bounds
-    const infillPaths = generateInfillPattern(
-      bounds,
-      settings.infillPattern,
-      settings.infillDensity,
-      settings.infillAngle,
-      clipPolygon
-    );
-    
-    // Clip infill to the actual shape (polygon) if available, otherwise use bounds
-    // Note: concentric pattern doesn't need clipping as it's already contour-based
-    let clippedInfill: Path[];
-    if (settings.infillPattern === 'concentric') {
-      clippedInfill = infillPaths; // Already follows contour
-    } else if (clipPolygon && clipPolygon.length >= 3) {
-      clippedInfill = clipPathsToPolygon(infillPaths, clipPolygon);
+    if (polygons.length > 0) {
+      // Process each polygon separately for proper multi-shape infill
+      let processed = 0;
+      for (const polygon of polygons) {
+        onProgress?.({
+          stage: 'slicing',
+          progress: 30 + Math.floor((processed / polygons.length) * 50),
+          message: `Generating ${settings.infillPattern} pattern (${processed + 1}/${polygons.length})...`,
+        });
+        
+        const polyBounds = getPolygonBounds(polygon);
+        
+        // Generate infill pattern for this polygon's bounds
+        const infillPaths = generateInfillPattern(
+          polyBounds,
+          settings.infillPattern,
+          settings.infillDensity,
+          settings.infillAngle,
+          polygon
+        );
+        
+        // Clip infill to this specific polygon
+        let clippedInfill: Path[];
+        if (settings.infillPattern === 'concentric') {
+          clippedInfill = infillPaths;
+        } else {
+          clippedInfill = clipPathsToPolygon(infillPaths, polygon);
+        }
+        
+        outputPaths.push(...clippedInfill);
+        processed++;
+      }
     } else {
-      clippedInfill = clipPathsToBounds(infillPaths, bounds);
+      // Fallback: no closed polygons found, use bounding box approach
+      onProgress?.({
+        stage: 'slicing',
+        progress: 50,
+        message: `Generating ${settings.infillPattern} pattern...`,
+      });
+      
+      const clipPolygon = createClippingPolygon(inputPaths);
+      
+      const infillPaths = generateInfillPattern(
+        bounds,
+        settings.infillPattern,
+        settings.infillDensity,
+        settings.infillAngle,
+        clipPolygon
+      );
+      
+      let clippedInfill: Path[];
+      if (settings.infillPattern === 'concentric') {
+        clippedInfill = infillPaths;
+      } else if (clipPolygon && clipPolygon.length >= 3) {
+        clippedInfill = clipPathsToPolygon(infillPaths, clipPolygon);
+      } else {
+        clippedInfill = clipPathsToBounds(infillPaths, bounds);
+      }
+      outputPaths.push(...clippedInfill);
     }
-    outputPaths.push(...clippedInfill);
   }
   
   onProgress?.({
@@ -953,6 +1038,7 @@ export async function slicePaths(
 /**
  * Synchronous slicer function for use in flow executor
  * Uses fallback pattern generation (no CuraWASM)
+ * Processes each closed polygon separately for proper multi-shape infill
  */
 export function slicePathsSync(
   inputPaths: Path[],
@@ -961,12 +1047,6 @@ export function slicePathsSync(
   if (inputPaths.length === 0) {
     return [];
   }
-  
-  // Get bounds for infill generation
-  const bounds = getPathsBounds(inputPaths);
-  
-  // Create clipping polygon from input paths
-  const clipPolygon = createClippingPolygon(inputPaths);
   
   const outputPaths: Path[] = [];
   
@@ -977,26 +1057,57 @@ export function slicePathsSync(
   
   // Generate infill if enabled
   if (settings.includeInfill && settings.infillDensity > 0) {
-    const infillPaths = generateInfillPattern(
-      bounds,
-      settings.infillPattern,
-      settings.infillDensity,
-      settings.infillAngle,
-      clipPolygon
-    );
+    // Extract all closed polygons from input
+    const polygons = extractClosedPolygons(inputPaths);
     
-    // Clip infill to the actual shape (polygon) if available, otherwise use bounds
-    // Note: concentric pattern doesn't need clipping as it's already contour-based
-    let clippedInfill: Path[];
-    if (settings.infillPattern === 'concentric') {
-      clippedInfill = infillPaths; // Already follows contour
-    } else if (clipPolygon && clipPolygon.length >= 3) {
-      clippedInfill = clipPathsToPolygon(infillPaths, clipPolygon);
+    if (polygons.length > 0) {
+      // Process each polygon separately for proper multi-shape infill
+      for (const polygon of polygons) {
+        const polyBounds = getPolygonBounds(polygon);
+        
+        // Generate infill pattern for this polygon's bounds
+        const infillPaths = generateInfillPattern(
+          polyBounds,
+          settings.infillPattern,
+          settings.infillDensity,
+          settings.infillAngle,
+          polygon
+        );
+        
+        // Clip infill to this specific polygon
+        let clippedInfill: Path[];
+        if (settings.infillPattern === 'concentric') {
+          clippedInfill = infillPaths; // Already follows contour
+        } else {
+          clippedInfill = clipPathsToPolygon(infillPaths, polygon);
+        }
+        
+        outputPaths.push(...clippedInfill);
+      }
     } else {
-      clippedInfill = clipPathsToBounds(infillPaths, bounds);
+      // Fallback: no closed polygons found, use bounding box approach
+      const bounds = getPathsBounds(inputPaths);
+      const clipPolygon = createClippingPolygon(inputPaths);
+      
+      const infillPaths = generateInfillPattern(
+        bounds,
+        settings.infillPattern,
+        settings.infillDensity,
+        settings.infillAngle,
+        clipPolygon
+      );
+      
+      let clippedInfill: Path[];
+      if (settings.infillPattern === 'concentric') {
+        clippedInfill = infillPaths;
+      } else if (clipPolygon && clipPolygon.length >= 3) {
+        clippedInfill = clipPathsToPolygon(infillPaths, clipPolygon);
+      } else {
+        clippedInfill = clipPathsToBounds(infillPaths, bounds);
+      }
+      
+      outputPaths.push(...clippedInfill);
     }
-    
-    outputPaths.push(...clippedInfill);
   }
   
   return outputPaths;
@@ -1005,6 +1116,7 @@ export function slicePathsSync(
 /**
  * Async slicer function that can use Clipper2 for better results
  * Falls back to sync version if Clipper2 is not available
+ * Processes each closed polygon separately for proper multi-shape infill
  */
 export async function slicePathsAsync(
   inputPaths: Path[],
@@ -1014,29 +1126,48 @@ export async function slicePathsAsync(
     return [];
   }
   
-  // For concentric pattern, try to use Clipper2 for better results
-  if (settings.infillPattern === 'concentric' && settings.includeInfill && settings.infillDensity > 0) {
-    const bounds = getPathsBounds(inputPaths);
-    const clipPolygon = createClippingPolygon(inputPaths);
-    
-    const outputPaths: Path[] = [];
-    
-    if (settings.includeWalls) {
-      outputPaths.push(...inputPaths);
-    }
-    
-    // Use Clipper2-enhanced concentric generation
-    const infillPaths = await generateConcentricInfillClipper(
-      clipPolygon,
-      bounds,
-      settings.infillDensity
-    );
-    
-    outputPaths.push(...infillPaths);
-    return outputPaths;
+  const outputPaths: Path[] = [];
+  
+  if (settings.includeWalls) {
+    outputPaths.push(...inputPaths);
   }
   
-  // For other patterns, use sync version
+  // For concentric pattern, try to use Clipper2 for better results
+  if (settings.infillPattern === 'concentric' && settings.includeInfill && settings.infillDensity > 0) {
+    const polygons = extractClosedPolygons(inputPaths);
+    
+    if (polygons.length > 0) {
+      // Process each polygon separately
+      for (const polygon of polygons) {
+        const polyBounds = getPolygonBounds(polygon);
+        
+        // Use Clipper2-enhanced concentric generation for each polygon
+        const infillPaths = await generateConcentricInfillClipper(
+          polygon,
+          polyBounds,
+          settings.infillDensity
+        );
+        
+        outputPaths.push(...infillPaths);
+      }
+      return outputPaths;
+    } else {
+      // Fallback: use bounding box
+      const bounds = getPathsBounds(inputPaths);
+      const clipPolygon = createClippingPolygon(inputPaths);
+      
+      const infillPaths = await generateConcentricInfillClipper(
+        clipPolygon,
+        bounds,
+        settings.infillDensity
+      );
+      
+      outputPaths.push(...infillPaths);
+      return outputPaths;
+    }
+  }
+  
+  // For other patterns, use sync version (already handles multi-shape)
   return slicePathsSync(inputPaths, settings);
 }
 
