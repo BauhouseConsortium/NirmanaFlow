@@ -269,24 +269,26 @@ function HalftoneNodeComponent({ data, id }: HalftoneNodeProps) {
 
         {/* Amplitude range */}
         <div className="space-y-2">
-          <div className="text-xs text-slate-400">Amplitude Range</div>
+          <div className="text-xs text-slate-400">Wave Amplitude</div>
           <div className="grid grid-cols-2 gap-2">
-            <NumberField
+            <SliderField
               label="Min (light)"
               value={minAmplitude}
               min={0}
-              max={maxAmplitude}
+              max={5}
               step={0.05}
               field="minAmplitude"
+              unit="mm"
               onChange={handleChange}
             />
-            <NumberField
+            <SliderField
               label="Max (dark)"
               value={maxAmplitude}
-              min={minAmplitude}
+              min={0.1}
               max={10}
-              step={0.05}
+              step={0.1}
               field="maxAmplitude"
+              unit="mm"
               onChange={handleChange}
             />
           </div>
