@@ -183,6 +183,30 @@ export const CodeNodeDataSchema = BaseNodeDataSchema.extend({
   error: z.string().optional(),
 });
 
+// ============ Image Node ============
+
+export const ImageNodeDataSchema = BaseNodeDataSchema.extend({
+  imageData: z.string().optional(), // base64 data URL
+  width: z.number().min(0).optional(),
+  height: z.number().min(0).optional(),
+  filename: z.string().optional(),
+});
+
+// ============ Halftone Node ============
+
+export const HalftoneNodeDataSchema = BaseNodeDataSchema.extend({
+  mode: z.enum(['sine', 'zigzag', 'square', 'triangle']),
+  lineSpacing: z.number().min(0.5).max(20),
+  waveLength: z.number().min(0.5).max(50),
+  minAmplitude: z.number().min(0).max(10),
+  maxAmplitude: z.number().min(0.1).max(10),
+  angle: z.number().min(-180).max(180),
+  sampleResolution: z.number().int().min(10).max(500),
+  invert: z.boolean(),
+  outputWidth: z.number().min(10).max(500),
+  outputHeight: z.number().min(10).max(500),
+});
+
 // ============ Slicer Node ============
 
 export const SlicerNodeDataSchema = BaseNodeDataSchema.extend({
@@ -234,6 +258,8 @@ export const nodeSchemaMap = {
   attractor: AttractorNodeDataSchema,
   lsystem: LSystemNodeDataSchema,
   code: CodeNodeDataSchema,
+  image: ImageNodeDataSchema,
+  halftone: HalftoneNodeDataSchema,
   slicer: SlicerNodeDataSchema,
   output: OutputNodeDataSchema,
 } as const;
@@ -260,6 +286,8 @@ export type AlgorithmicNodeData = z.infer<typeof AlgorithmicNodeDataSchema>;
 export type AttractorNodeData = z.infer<typeof AttractorNodeDataSchema>;
 export type LSystemNodeData = z.infer<typeof LSystemNodeDataSchema>;
 export type CodeNodeData = z.infer<typeof CodeNodeDataSchema>;
+export type ImageNodeData = z.infer<typeof ImageNodeDataSchema>;
+export type HalftoneNodeData = z.infer<typeof HalftoneNodeDataSchema>;
 export type SlicerNodeData = z.infer<typeof SlicerNodeDataSchema>;
 export type OutputNodeData = z.infer<typeof OutputNodeDataSchema>;
 
@@ -284,6 +312,8 @@ export type FlowNodeData =
   | AttractorNodeData
   | LSystemNodeData
   | CodeNodeData
+  | ImageNodeData
+  | HalftoneNodeData
   | SlicerNodeData
   | OutputNodeData;
 

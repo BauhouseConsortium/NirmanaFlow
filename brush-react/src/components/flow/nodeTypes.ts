@@ -176,6 +176,28 @@ export interface CodeNodeData extends NodeData {
   error?: string;
 }
 
+// Image node data type
+export interface ImageNodeData extends NodeData {
+  imageData?: string; // base64 data URL
+  width?: number;
+  height?: number;
+  filename?: string;
+}
+
+// Halftone node data type
+export interface HalftoneNodeData extends NodeData {
+  mode: 'sine' | 'zigzag' | 'square' | 'triangle';
+  lineSpacing: number;
+  waveLength: number;
+  minAmplitude: number;
+  maxAmplitude: number;
+  angle: number;
+  sampleResolution: number;
+  invert: boolean;
+  outputWidth: number;
+  outputHeight: number;
+}
+
 // Slicer node data type
 export interface SlicerNodeData extends NodeData {
   extrudeHeight: number;
@@ -218,6 +240,8 @@ export type FlowNodeData =
   | LSystemNodeData
   | PathNodeData
   | CodeNodeData
+  | ImageNodeData
+  | HalftoneNodeData
   | SlicerNodeData
   | OutputNodeData;
 
@@ -249,6 +273,10 @@ export const nodeCategories = {
     { type: 'attractor', label: 'Attractor', description: 'Strange attractors (Clifford, De Jong, etc.)' },
     { type: 'lsystem', label: 'L-System', description: 'Lindenmayer system fractal patterns' },
     { type: 'code', label: 'Code', description: 'Custom JavaScript code to transform or generate paths' },
+  ],
+  image: [
+    { type: 'image', label: 'Image', description: 'Load an image for processing' },
+    { type: 'halftone', label: 'Halftone', description: 'Sinusoidal line halftone pattern from image' },
   ],
   // Slicer disabled for now - may re-enable later
   // slicer: [
@@ -343,6 +371,26 @@ for (const path of input) {
 }
 return output;
 `,
+  },
+  image: {
+    label: 'Image',
+    imageData: undefined,
+    width: undefined,
+    height: undefined,
+    filename: undefined,
+  },
+  halftone: {
+    label: 'Halftone',
+    mode: 'sine',
+    lineSpacing: 2,
+    waveLength: 4,
+    minAmplitude: 0.1,
+    maxAmplitude: 1.5,
+    angle: 0,
+    sampleResolution: 100,
+    invert: false,
+    outputWidth: 100,
+    outputHeight: 100,
   },
   // Slicer disabled for now - may re-enable later
   // slicer: {

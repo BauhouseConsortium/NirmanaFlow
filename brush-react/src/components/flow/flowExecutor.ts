@@ -227,6 +227,255 @@ function parseNodeData<T extends NodeType>(
   return result.success ? result.data : null;
 }
 
+// ============ Halftone Pattern Generation ============
+
+type WaveMode = 'sine' | 'zigzag' | 'square' | 'triangle';
+
+interface HalftoneSettings {
+  mode: WaveMode;
+  lineSpacing: number;
+  waveLength: number;
+  minAmplitude: number;
+  maxAmplitude: number;
+  angle: number;
+  sampleResolution: number;
+  invert: boolean;
+  outputWidth: number;
+  outputHeight: number;
+}
+
+/**
+ * Calculate wave offset based on mode
+ * @param phase - The phase position (0 to 2π per cycle)
+ * @param amplitude - The current amplitude
+ * @param mode - The wave mode
+ */
+function getWaveOffset(phase: number, amplitude: number, mode: WaveMode): number {
+  // Normalize phase to 0-1 range within each cycle
+  const t = ((phase % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const normalizedT = t / (Math.PI * 2);
+  
+  switch (mode) {
+    case 'sine':
+      // Smooth sine wave
+      return Math.sin(phase) * amplitude;
+    
+    case 'zigzag':
+      // Linear zigzag (sawtooth-like but symmetric)
+      // Goes from 0 to 1 to 0 to -1 to 0
+      if (normalizedT < 0.25) {
+        return (normalizedT * 4) * amplitude;
+      } else if (normalizedT < 0.75) {
+        return (1 - (normalizedT - 0.25) * 4) * amplitude;
+      } else {
+        return (-1 + (normalizedT - 0.75) * 4) * amplitude;
+      }
+    
+    case 'square':
+      // Square wave with slight ramps for smoother pen movement
+      const rampWidth = 0.05;
+      if (normalizedT < rampWidth) {
+        return (normalizedT / rampWidth) * amplitude;
+      } else if (normalizedT < 0.5 - rampWidth) {
+        return amplitude;
+      } else if (normalizedT < 0.5 + rampWidth) {
+        return (1 - (normalizedT - (0.5 - rampWidth)) / (rampWidth * 2) * 2) * amplitude;
+      } else if (normalizedT < 1 - rampWidth) {
+        return -amplitude;
+      } else {
+        return (-1 + (normalizedT - (1 - rampWidth)) / rampWidth) * amplitude;
+      }
+    
+    case 'triangle':
+      // Triangle wave - linear slopes
+      if (normalizedT < 0.25) {
+        return (normalizedT * 4) * amplitude;
+      } else if (normalizedT < 0.5) {
+        return (1 - (normalizedT - 0.25) * 4) * amplitude;
+      } else if (normalizedT < 0.75) {
+        return (-(normalizedT - 0.5) * 4) * amplitude;
+      } else {
+        return (-1 + (normalizedT - 0.75) * 4) * amplitude;
+      }
+    
+    default:
+      return Math.sin(phase) * amplitude;
+  }
+}
+
+// Cache for image data to avoid re-parsing
+const imageDataCache = new Map<string, ImageData>();
+
+/**
+ * Load image from base64 data URL and get pixel data
+ */
+function loadImageData(dataUrl: string, targetWidth: number, targetHeight: number): ImageData | null {
+  // Check cache first (keyed by dataUrl + dimensions)
+  const cacheKey = `${dataUrl.slice(0, 100)}_${targetWidth}_${targetHeight}`;
+  if (imageDataCache.has(cacheKey)) {
+    return imageDataCache.get(cacheKey)!;
+  }
+  
+  // Create off-screen canvas for image processing
+  const canvas = document.createElement('canvas');
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  // Load image synchronously (blocking - not ideal but simple)
+  const img = new Image();
+  img.src = dataUrl;
+  
+  // If image hasn't loaded yet, we can't proceed
+  // The image should be loaded already since it was displayed in the UI
+  if (!img.complete || img.naturalWidth === 0) {
+    // Try to force load - this may not work for all cases
+    return null;
+  }
+  
+  // Draw image scaled to target size
+  ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+  
+  try {
+    const imageData = ctx.getImageData(0, 0, targetWidth, targetHeight);
+    // Cache for future use (limit cache size)
+    if (imageDataCache.size > 10) {
+      const firstKey = imageDataCache.keys().next().value;
+      if (firstKey) imageDataCache.delete(firstKey);
+    }
+    imageDataCache.set(cacheKey, imageData);
+    return imageData;
+  } catch {
+    // May fail due to CORS
+    return null;
+  }
+}
+
+/**
+ * Get brightness (0-1) at a specific position in the image data
+ */
+function getBrightness(imageData: ImageData, x: number, y: number): number {
+  const ix = Math.floor(x);
+  const iy = Math.floor(y);
+  
+  if (ix < 0 || ix >= imageData.width || iy < 0 || iy >= imageData.height) {
+    return 1; // Return white for out of bounds
+  }
+  
+  const idx = (iy * imageData.width + ix) * 4;
+  const r = imageData.data[idx];
+  const g = imageData.data[idx + 1];
+  const b = imageData.data[idx + 2];
+  
+  // Convert to grayscale using luminance formula
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+/**
+ * Generate halftone pattern from image with various wave modes
+ * Dark areas = high amplitude waves, Light areas = low amplitude waves
+ */
+function generateHalftonePattern(imageDataUrl: string, settings: HalftoneSettings): Path[] {
+  const {
+    mode,
+    lineSpacing,
+    waveLength,
+    minAmplitude,
+    maxAmplitude,
+    angle,
+    sampleResolution,
+    invert,
+    outputWidth,
+    outputHeight,
+  } = settings;
+  
+  // Convert wavelength to frequency (waves per mm)
+  const frequency = 1 / Math.max(0.1, waveLength);
+  
+  // Calculate sample dimensions based on output size and resolution
+  const sampleWidth = Math.min(sampleResolution, Math.ceil(outputWidth / lineSpacing) * 10);
+  const sampleHeight = Math.min(sampleResolution, Math.ceil(outputHeight / lineSpacing) * 10);
+  
+  const imageData = loadImageData(imageDataUrl, sampleWidth, sampleHeight);
+  if (!imageData) {
+    // If image can't be loaded, return empty pattern
+    return [];
+  }
+  
+  const paths: Path[] = [];
+  const angleRad = (angle * Math.PI) / 180;
+  const cosA = Math.cos(angleRad);
+  const sinA = Math.sin(angleRad);
+  
+  // Calculate how many lines we need
+  // Account for rotation by calculating the diagonal extent
+  const diagonal = Math.sqrt(outputWidth * outputWidth + outputHeight * outputHeight);
+  const numLines = Math.ceil(diagonal / lineSpacing) + 2;
+  const startOffset = -diagonal / 2;
+  
+  // Center of the output area
+  const centerX = outputWidth / 2;
+  const centerY = outputHeight / 2;
+  
+  for (let i = 0; i < numLines; i++) {
+    const yOffset = startOffset + i * lineSpacing;
+    const path: Point[] = [];
+    
+    // Generate points along the line
+    const numPoints = Math.ceil(diagonal / 0.5); // Sample every 0.5mm
+    
+    for (let j = 0; j <= numPoints; j++) {
+      const t = j / numPoints;
+      const xLocal = startOffset + t * diagonal;
+      const yLocal = yOffset;
+      
+      // Rotate to get world coordinates relative to center
+      const xWorld = centerX + xLocal * cosA - yLocal * sinA;
+      const yWorld = centerY + xLocal * sinA + yLocal * cosA;
+      
+      // Check if point is within output bounds
+      if (xWorld < 0 || xWorld > outputWidth || yWorld < 0 || yWorld > outputHeight) {
+        // If we have points in the current segment, save it and start a new one
+        if (path.length > 1) {
+          paths.push([...path]);
+        }
+        path.length = 0;
+        continue;
+      }
+      
+      // Sample image brightness at this position
+      const sampleX = (xWorld / outputWidth) * (sampleWidth - 1);
+      const sampleY = (yWorld / outputHeight) * (sampleHeight - 1);
+      let brightness = getBrightness(imageData, sampleX, sampleY);
+      
+      if (invert) {
+        brightness = 1 - brightness;
+      }
+      
+      // Map brightness to amplitude (dark = high amplitude, light = low amplitude)
+      const amplitude = minAmplitude + (1 - brightness) * (maxAmplitude - minAmplitude);
+      
+      // Calculate wave offset perpendicular to the line direction based on mode
+      const wavePhase = xLocal * frequency * Math.PI * 2;
+      const sineOffset = getWaveOffset(wavePhase, amplitude, mode);
+      
+      // Apply sine offset perpendicular to line direction
+      const finalX = xWorld - sineOffset * sinA;
+      const finalY = yWorld + sineOffset * cosA;
+      
+      path.push([finalX, finalY]);
+    }
+    
+    // Add the last segment if it has points
+    if (path.length > 1) {
+      paths.push(path);
+    }
+  }
+  
+  return paths;
+}
+
 // Get all source nodes that connect to a target node
 function getSourceNodes(targetId: string, nodes: Node[], edges: Edge[]): Node[] {
   const incomingEdges = edges.filter((e) => e.target === targetId);
@@ -1558,6 +1807,54 @@ export function executeFlowGraph(
           detail: { nodeId: node.id, field: 'error', value: undefined },
         });
         window.dispatchEvent(event);
+      }
+    } else if (node.type === 'image') {
+      // Image nodes don't generate paths directly - they just store image data
+      // The image data is passed through to halftone or other image processing nodes
+      // Return empty paths (the image data is accessed directly by downstream nodes)
+      paths = [];
+    } else if (node.type === 'halftone') {
+      // Halftone nodes generate sinusoidal line patterns from source image
+      // Find connected image node
+      let imageData: string | undefined;
+      for (const source of sourceNodes) {
+        const sourceData = nodes.find(n => n.id === source.id)?.data as Record<string, unknown>;
+        if (sourceData?.imageData) {
+          imageData = sourceData.imageData as string;
+          break;
+        }
+      }
+      
+      if (imageData) {
+        // Generate halftone pattern from image
+        const halftoneData = nodeData as {
+          mode?: WaveMode;
+          lineSpacing?: number;
+          waveLength?: number;
+          minAmplitude?: number;
+          maxAmplitude?: number;
+          angle?: number;
+          sampleResolution?: number;
+          invert?: boolean;
+          outputWidth?: number;
+          outputHeight?: number;
+        };
+        
+        paths = toColoredPaths(
+          generateHalftonePattern(imageData, {
+            mode: halftoneData.mode ?? 'sine',
+            lineSpacing: halftoneData.lineSpacing ?? 2,
+            waveLength: halftoneData.waveLength ?? 4,
+            minAmplitude: halftoneData.minAmplitude ?? 0.1,
+            maxAmplitude: halftoneData.maxAmplitude ?? 1.5,
+            angle: halftoneData.angle ?? 0,
+            sampleResolution: halftoneData.sampleResolution ?? 100,
+            invert: halftoneData.invert ?? false,
+            outputWidth: halftoneData.outputWidth ?? 100,
+            outputHeight: halftoneData.outputHeight ?? 100,
+          }),
+          nodeColor
+        );
       }
     // Slicer disabled for now - may re-enable later
     // } else if (node.type === 'slicer') {

@@ -29,6 +29,8 @@ import { AttractorNode } from './AttractorNode';
 import { LSystemNode } from './LSystemNode';
 import { PathNode } from './PathNode';
 import { CodeNode } from './CodeNode';
+import { ImageNode } from './ImageNode';
+import { HalftoneNode } from './HalftoneNode';
 // import { SlicerNode } from './SlicerNode'; // Disabled for now - may re-enable later
 import { CustomEdge } from './CustomEdge';
 import { NodePalette } from './NodePalette';
@@ -52,6 +54,8 @@ const nodeTypes = {
   lsystem: LSystemNode,
   path: PathNode,
   code: CodeNode,
+  image: ImageNode,
+  halftone: HalftoneNode,
   // slicer: SlicerNode, // Disabled for now - may re-enable later
 };
 
@@ -202,6 +206,10 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeType = 'path';
       } else if (type === 'code') {
         nodeType = 'code';
+      } else if (type === 'image') {
+        nodeType = 'image';
+      } else if (type === 'halftone') {
+        nodeType = 'halftone';
       } else if (type === 'slicer') {
         nodeType = 'slicer';
       }

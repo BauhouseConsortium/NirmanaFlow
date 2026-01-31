@@ -30,6 +30,8 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
       attractor: '∞',
       lsystem: '🌿',
       code: '</>',
+      image: '🖼️',
+      halftone: '∿',
       // slicer: '⬢', // Disabled for now
     };
     return icons[type] || '•';
@@ -128,6 +130,24 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
           <h4 className="text-xs font-medium text-pink-400 mb-2 uppercase tracking-wider px-1">Algorithmic</h4>
           <div className="grid grid-cols-2 gap-1">
             {nodeCategories.algorithmic.map((node) => (
+              <button
+                key={node.type}
+                onClick={() => onAddNode(node.type)}
+                className="text-left px-2.5 py-2 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
+                title={node.description}
+              >
+                <span className="w-5 text-center text-xs opacity-60">{getIcon(node.type)}</span>
+                <span className="truncate">{node.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Image Processing */}
+        <div className="mb-3">
+          <h4 className="text-xs font-medium text-amber-400 mb-2 uppercase tracking-wider px-1">Image</h4>
+          <div className="grid grid-cols-2 gap-1">
+            {nodeCategories.image.map((node) => (
               <button
                 key={node.type}
                 onClick={() => onAddNode(node.type)}
