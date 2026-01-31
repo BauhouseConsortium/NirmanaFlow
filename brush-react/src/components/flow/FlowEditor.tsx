@@ -321,6 +321,7 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
 
   // Execute flow when nodes or edges change (with persistent cache + debounce)
   const executeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastResultRef = useRef<ExecutionResult | null>(null);
   
   useEffect(() => {
     // Clear any pending execution
@@ -328,11 +329,20 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
       clearTimeout(executeTimeoutRef.current);
     }
     
-    // Debounce execution (50ms) to avoid running on every drag frame
+    // Debounce execution (100ms) to avoid running during drag
     executeTimeoutRef.current = setTimeout(() => {
       const result = executeFlow(nodes, edges, executionCacheRef.current);
-      onChange?.(result.paths, result);
-    }, 50);
+      
+      // Only trigger onChange if paths actually changed
+      const pathsChanged = !lastResultRef.current || 
+        result.paths.length !== lastResultRef.current.paths.length ||
+        JSON.stringify(result.paths) !== JSON.stringify(lastResultRef.current.paths);
+      
+      if (pathsChanged) {
+        lastResultRef.current = result;
+        onChange?.(result.paths, result);
+      }
+    }, 100);
     
     return () => {
       if (executeTimeoutRef.current) {

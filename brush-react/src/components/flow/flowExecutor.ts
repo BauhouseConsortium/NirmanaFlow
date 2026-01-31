@@ -42,8 +42,22 @@ export class FlowExecutionCache {
    */
   private getRelevantNodeData(node: Node): Record<string, unknown> {
     const data = node.data as Record<string, unknown>;
-    // Filter out UI-only fields
-    const { selected, dragging, ...relevantData } = data;
+    // Filter out ALL UI-only and React Flow internal fields
+    const {
+      selected,
+      dragging,
+      resizing,
+      isConnectable,
+      positionAbsolute,
+      zIndex,
+      sourcePosition,
+      targetPosition,
+      dragHandle,
+      selectable,
+      deletable,
+      focusable,
+      ...relevantData
+    } = data;
     
     // For image nodes, replace imageData with a short hash to avoid expensive full hashing
     if (node.type === 'image' && relevantData.imageData) {
