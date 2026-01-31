@@ -35,6 +35,9 @@ import { HalftoneNode } from './HalftoneNode';
 import { AsciiNode } from './AsciiNode';
 import { MaskNode } from './MaskNode';
 import { SlicerNode } from './SlicerNode';
+import { ObjLoaderNode } from './ObjLoaderNode';
+import { WireframeNode } from './WireframeNode';
+import { SupershapeNode } from './SupershapeNode';
 import { CustomEdge } from './CustomEdge';
 import { NodePalette } from './NodePalette';
 import { GlyphEditor } from './GlyphEditor';
@@ -63,6 +66,9 @@ const nodeTypes = {
   ascii: AsciiNode,
   mask: MaskNode,
   slicer: SlicerNode,
+  objloader: ObjLoaderNode,
+  wireframe: WireframeNode,
+  supershape: SupershapeNode,
 };
 
 // Define custom edge types
@@ -224,6 +230,12 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeType = 'mask';
       } else if (type === 'slicer') {
         nodeType = 'slicer';
+      } else if (type === 'objloader') {
+        nodeType = 'objloader';
+      } else if (type === 'wireframe') {
+        nodeType = 'wireframe';
+      } else if (type === 'supershape') {
+        nodeType = 'supershape';
       }
 
       const newNode: Node = {

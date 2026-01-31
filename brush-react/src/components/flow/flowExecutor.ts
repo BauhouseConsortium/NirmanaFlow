@@ -231,8 +231,10 @@ import {
   type TextNodeData,
   type BatakTextNodeData,
   type SlicerNodeData,
+  type WireframeNodeData,
 } from '../../schemas/flowNodeSchemas';
 import { slicePathsSync, type SlicerSettings } from '../../utils/slicerService';
+import { deserializeGeometry, projectToWireframe, type CameraSettings } from '../../utils/objLoader';
 
 /**
  * Safely parse node data using Zod schema
@@ -2639,6 +2641,47 @@ export function executeFlowGraph(
         });
         window.dispatchEvent(event);
       }
+    } else if (node.type === 'wireframe') {
+      // Wireframe node - renders 3D geometry from connected ObjLoader or Supershape as 2D wireframe paths
+      // Find connected 3D geometry source node(s)
+      for (const source of sourceNodes) {
+        if (source.type === 'objloader' || source.type === 'supershape') {
+          const sourceData = source.data as Record<string, unknown>;
+          const geometryDataStr = sourceData.geometryData as string | undefined;
+          
+          if (geometryDataStr) {
+            try {
+              const geometry = deserializeGeometry(geometryDataStr);
+              if (geometry) {
+                // Get wireframe settings
+                const validated = parseNodeData('wireframe', nodeData) as WireframeNodeData | null;
+                const camera: CameraSettings = {
+                  rotationX: validated?.rotationX ?? 35,
+                  rotationY: validated?.rotationY ?? 45,
+                  rotationZ: validated?.rotationZ ?? 0,
+                  distance: validated?.distance ?? 3,
+                  projection: validated?.projection ?? 'orthographic',
+                  fov: validated?.fov ?? 50,
+                  scale: validated?.scale ?? 50,
+                  centerX: validated?.centerX ?? 75,
+                  centerY: validated?.centerY ?? 60,
+                  edgeReduction: validated?.edgeReduction ?? 0,
+                  edgeAngleThreshold: validated?.edgeAngleThreshold ?? 0,
+                };
+                
+                const wireframePaths = projectToWireframe(geometry, camera);
+                paths = toColoredPaths(wireframePaths, nodeColor);
+              }
+            } catch (err) {
+              console.error('Wireframe rendering error:', err);
+            }
+          }
+        }
+      }
+    } else if (node.type === 'objloader' || node.type === 'supershape') {
+      // ObjLoader and Supershape nodes don't generate paths - they just store geometry data
+      // The Wireframe node reads from them
+      paths = [];
     } else if (node.type === 'group') {
       // Group node - collect paths from child nodes that are terminal (output not connected to siblings)
       const childNodes = nodes.filter((n) => n.parentId === nodeId);

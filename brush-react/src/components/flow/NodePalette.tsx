@@ -36,6 +36,9 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
       ascii: 'Aa',
       mask: '◐',
       slicer: '⬢',
+      objloader: '📦',
+      supershape: '✦',
+      wireframe: '◇',
     };
     return icons[type] || '•';
   };
@@ -165,10 +168,28 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
         </div>
 
         {/* Slicer */}
-        <div className="mb-2">
+        <div className="mb-3">
           <h4 className="text-xs font-medium text-indigo-400 mb-2 uppercase tracking-wider px-1">Slicer</h4>
           <div className="grid grid-cols-2 gap-1">
             {nodeCategories.slicer.map((node) => (
+              <button
+                key={node.type}
+                onClick={() => onAddNode(node.type)}
+                className="text-left px-2.5 py-2 rounded text-sm text-slate-300 hover:bg-slate-700 hover:text-white transition-colors flex items-center gap-2"
+                title={node.description}
+              >
+                <span className="w-5 text-center text-xs opacity-60">{getIcon(node.type)}</span>
+                <span className="truncate">{node.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 3D */}
+        <div className="mb-2">
+          <h4 className="text-xs font-medium text-orange-400 mb-2 uppercase tracking-wider px-1">3D</h4>
+          <div className="grid grid-cols-2 gap-1">
+            {nodeCategories.threeD.map((node) => (
               <button
                 key={node.type}
                 onClick={() => onAddNode(node.type)}

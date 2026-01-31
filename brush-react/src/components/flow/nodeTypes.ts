@@ -249,6 +249,55 @@ export interface SlicerNodeData extends NodeData {
   lastSliceHash?: string;
 }
 
+// OBJ Loader node
+export interface ObjLoaderNodeData extends NodeData {
+  filename?: string;
+  geometryData?: string; // Serialized Geometry3D
+  vertexCount?: number;
+  edgeCount?: number;
+  faceCount?: number;
+  error?: string;
+}
+
+// Wireframe renderer node
+export interface WireframeNodeData extends NodeData {
+  rotationX: number;
+  rotationY: number;
+  rotationZ: number;
+  distance: number;
+  projection: 'perspective' | 'orthographic';
+  fov: number;
+  scale: number;
+  centerX: number;
+  centerY: number;
+  edgeReduction: number;
+  edgeAngleThreshold: number;
+}
+
+// Supershape generator node
+export interface SupershapeNodeData extends NodeData {
+  // First superformula (latitude)
+  m1: number;
+  n1_1: number;
+  n2_1: number;
+  n3_1: number;
+  a1: number;
+  b1: number;
+  // Second superformula (longitude)
+  m2: number;
+  n1_2: number;
+  n2_2: number;
+  n3_2: number;
+  a2: number;
+  b2: number;
+  // Resolution
+  segments: number;
+  // Generated data
+  geometryData?: string;
+  vertexCount?: number;
+  edgeCount?: number;
+}
+
 // Output node
 export interface OutputNodeData extends NodeData {
   // No additional data needed
@@ -279,6 +328,9 @@ export type FlowNodeData =
   | AsciiNodeData
   | MaskNodeData
   | SlicerNodeData
+  | ObjLoaderNodeData
+  | WireframeNodeData
+  | SupershapeNodeData
   | OutputNodeData;
 
 // Node categories for the palette
@@ -319,6 +371,11 @@ export const nodeCategories = {
   ],
   slicer: [
     { type: 'slicer', label: 'Slicer', description: '3D slicer infill patterns (lines, grid, honeycomb, gyroid)' },
+  ],
+  threeD: [
+    // { type: 'objloader', label: 'OBJ Loader', description: 'Load 3D OBJ model file' },
+    { type: 'supershape', label: 'Supershape', description: 'Generate 3D supershape using the Gielis superformula' },
+    { type: 'wireframe', label: 'Wireframe', description: 'Render 3D geometry as 2D wireframe paths' },
   ],
 } as const;
 
@@ -474,6 +531,44 @@ return output;
     includeTravel: false,
     isSlicing: false,
     sliceProgress: 0,
+  },
+  objloader: {
+    label: 'OBJ Loader',
+    filename: undefined,
+    geometryData: undefined,
+    vertexCount: 0,
+    edgeCount: 0,
+    faceCount: 0,
+  },
+  wireframe: {
+    label: 'Wireframe',
+    rotationX: 35,
+    rotationY: 45,
+    rotationZ: 0,
+    distance: 3,
+    projection: 'orthographic',
+    fov: 50,
+    scale: 50,
+    centerX: 75,
+    centerY: 60,
+    edgeReduction: 0,
+    edgeAngleThreshold: 0,
+  },
+  supershape: {
+    label: 'Supershape',
+    m1: 4,
+    n1_1: 1,
+    n2_1: 1,
+    n3_1: 1,
+    a1: 1,
+    b1: 1,
+    m2: 4,
+    n1_2: 1,
+    n2_2: 1,
+    n3_2: 1,
+    a2: 1,
+    b2: 1,
+    segments: 20,
   },
   output: { label: 'Output' },
 };

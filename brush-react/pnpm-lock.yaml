@@ -17,21 +17,21 @@ importers:
       allotment:
         specifier: ^1.20.5
         version: 1.20.5(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
-<<<<<<< Updated upstream
       clipper2-wasm:
         specifier: ^0.2.1
         version: 0.2.1
-=======
       cura-wasm:
         specifier: ^1.5.2
         version: 1.5.2
->>>>>>> Stashed changes
       react:
         specifier: ^19.2.3
         version: 19.2.3
       react-dom:
         specifier: ^19.2.3
         version: 19.2.3(react@19.2.3)
+      three:
+        specifier: ^0.170.0
+        version: 0.170.0
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -1444,6 +1444,9 @@ packages:
 
   threads@1.7.0:
     resolution: {integrity: sha512-Mx5NBSHX3sQYR6iI9VYbgHKBLisyB+xROCBGjjWm1O9wb9vfLxdaGtmT/KCjUqMsSNW6nERzCW3T6H43LqjDZQ==}
+
+  three@0.170.0:
+    resolution: {integrity: sha512-FQK+LEpYc0fBD+J8g6oSEyyNzjp+Q7Ks1C568WWaoMRLW+TkNNWmenWeGgJjV105Gd+p/2ql1ZcjYvNiPZBhuQ==}
 
   tiny-emitter@2.1.0:
     resolution: {integrity: sha512-NB6Dk1A9xgQPMoGqC5CVXn123gWyte215ONT5Pp5a0yt4nlEoO1ZWeCwpncaekPHXO60i47ihFnZPiRPjRMq4Q==}
@@ -2876,6 +2879,8 @@ snapshots:
       tiny-worker: 2.3.0
     transitivePeerDependencies:
       - supports-color
+
+  three@0.170.0: {}
 
   tiny-emitter@2.1.0: {}
 

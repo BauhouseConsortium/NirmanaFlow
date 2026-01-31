@@ -267,6 +267,58 @@ export const SlicerNodeDataSchema = BaseNodeDataSchema.extend({
   lastSliceHash: z.string().optional(),
 });
 
+// ============ OBJ Loader Node ============
+
+export const ObjLoaderNodeDataSchema = BaseNodeDataSchema.extend({
+  filename: z.string().optional(),
+  geometryData: z.string().optional(), // Serialized Geometry3D
+  vertexCount: z.number().int().min(0).optional(),
+  edgeCount: z.number().int().min(0).optional(),
+  faceCount: z.number().int().min(0).optional(),
+  error: z.string().optional(),
+});
+
+// ============ Wireframe Node ============
+
+export const WireframeNodeDataSchema = BaseNodeDataSchema.extend({
+  rotationX: z.number().min(-360).max(360),
+  rotationY: z.number().min(-360).max(360),
+  rotationZ: z.number().min(-360).max(360),
+  distance: z.number().min(0.1).max(100),
+  projection: z.enum(['perspective', 'orthographic']),
+  fov: z.number().min(10).max(120),
+  scale: z.number().min(1).max(500),
+  centerX: z.number(),
+  centerY: z.number(),
+  edgeReduction: z.number().int().min(0).max(100),
+  edgeAngleThreshold: z.number().min(0).max(180),
+});
+
+// ============ Supershape Node ============
+
+export const SupershapeNodeDataSchema = BaseNodeDataSchema.extend({
+  // First superformula (latitude)
+  m1: z.number(),
+  n1_1: z.number(),
+  n2_1: z.number(),
+  n3_1: z.number(),
+  a1: z.number().min(0.01),
+  b1: z.number().min(0.01),
+  // Second superformula (longitude)
+  m2: z.number(),
+  n1_2: z.number(),
+  n2_2: z.number(),
+  n3_2: z.number(),
+  a2: z.number().min(0.01),
+  b2: z.number().min(0.01),
+  // Resolution
+  segments: z.number().int().min(5).max(100),
+  // Generated data
+  geometryData: z.string().optional(),
+  vertexCount: z.number().int().min(0).optional(),
+  edgeCount: z.number().int().min(0).optional(),
+});
+
 // ============ Output Node ============
 
 export const OutputNodeDataSchema = BaseNodeDataSchema;
@@ -300,6 +352,9 @@ export const nodeSchemaMap = {
   ascii: AsciiNodeDataSchema,
   mask: MaskNodeDataSchema,
   slicer: SlicerNodeDataSchema,
+  objloader: ObjLoaderNodeDataSchema,
+  wireframe: WireframeNodeDataSchema,
+  supershape: SupershapeNodeDataSchema,
   output: OutputNodeDataSchema,
 } as const;
 
@@ -331,6 +386,9 @@ export type HalftoneNodeData = z.infer<typeof HalftoneNodeDataSchema>;
 export type AsciiNodeData = z.infer<typeof AsciiNodeDataSchema>;
 export type MaskNodeData = z.infer<typeof MaskNodeDataSchema>;
 export type SlicerNodeData = z.infer<typeof SlicerNodeDataSchema>;
+export type ObjLoaderNodeData = z.infer<typeof ObjLoaderNodeDataSchema>;
+export type WireframeNodeData = z.infer<typeof WireframeNodeDataSchema>;
+export type SupershapeNodeData = z.infer<typeof SupershapeNodeDataSchema>;
 export type OutputNodeData = z.infer<typeof OutputNodeDataSchema>;
 
 // Union type
@@ -360,6 +418,9 @@ export type FlowNodeData =
   | AsciiNodeData
   | MaskNodeData
   | SlicerNodeData
+  | ObjLoaderNodeData
+  | WireframeNodeData
+  | SupershapeNodeData
   | OutputNodeData;
 
 // ============ Validation Helpers ============
