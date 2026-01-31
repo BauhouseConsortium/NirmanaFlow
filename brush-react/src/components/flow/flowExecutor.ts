@@ -230,10 +230,9 @@ import {
   type CodeNodeData,
   type TextNodeData,
   type BatakTextNodeData,
-  // type SlicerNodeData, // Slicer disabled for now
+  type SlicerNodeData,
 } from '../../schemas/flowNodeSchemas';
-// Slicer disabled for now - may re-enable later
-// import { slicePathsSync, type SlicerSettings } from '../../utils/slicerService';
+import { slicePathsSync, type SlicerSettings } from '../../utils/slicerService';
 
 /**
  * Safely parse node data using Zod schema
@@ -2597,48 +2596,49 @@ export function executeFlowGraph(
           nodeColor
         );
       }
-    // Slicer disabled for now - may re-enable later
-    // } else if (node.type === 'slicer') {
-    //   // Slicer nodes generate infill patterns from input paths
-    //   const inputPaths: ColoredPath[] = [];
-    //   for (const source of sourceNodes) {
-    //     inputPaths.push(...getNodePaths(source.id));
-    //   }
-    //   
-    //   // Get slicer settings from node data
-    //   const validated = parseNodeData('slicer', nodeData) as SlicerNodeData | null;
-    //   const settings: SlicerSettings = {
-    //     extrudeHeight: validated?.extrudeHeight ?? 10,
-    //     wallThickness: validated?.wallThickness ?? 0.8,
-    //     layerHeight: validated?.layerHeight ?? 0.2,
-    //     extractLayer: validated?.extractLayer ?? -1,
-    //     infillPattern: validated?.infillPattern ?? 'grid',
-    //     infillDensity: validated?.infillDensity ?? 20,
-    //     infillAngle: validated?.infillAngle ?? 45,
-    //     includeWalls: validated?.includeWalls ?? true,
-    //     includeInfill: validated?.includeInfill ?? true,
-    //     includeTravel: validated?.includeTravel ?? false,
-    //   };
-    //   
-    //   // Execute slicer synchronously (fallback mode - fast pattern generation)
-    //   try {
-    //     const plainPaths = toPlainPaths(inputPaths);
-    //     const sliceResult = slicePathsSync(plainPaths, settings);
-    //     paths = toColoredPaths(sliceResult, nodeColor);
-    //     
-    //     if (nodeData.error) {
-    //       const event = new CustomEvent('nodeDataChange', {
-    //         detail: { nodeId: node.id, field: 'error', value: undefined },
-    //       });
-    //       window.dispatchEvent(event);
-    //     }
-    //   } catch (err) {
-    //     const error = err instanceof Error ? err.message : String(err);
-    //     const event = new CustomEvent('nodeDataChange', {
-    //       detail: { nodeId: node.id, field: 'error', value: error },
-    //     });
-    //     window.dispatchEvent(event);
-    //   }
+    } else if (node.type === 'slicer') {
+      // Slicer nodes generate infill patterns from input paths
+      const inputPaths: ColoredPath[] = [];
+      for (const source of sourceNodes) {
+        inputPaths.push(...getNodePaths(source.id));
+      }
+      
+      // Get slicer settings from node data
+      const validated = parseNodeData('slicer', nodeData) as SlicerNodeData | null;
+      const settings: SlicerSettings = {
+        extrudeHeight: validated?.extrudeHeight ?? 10,
+        wallThickness: validated?.wallThickness ?? 0.8,
+        layerHeight: validated?.layerHeight ?? 0.2,
+        extractLayer: validated?.extractLayer ?? -1,
+        infillPattern: validated?.infillPattern ?? 'grid',
+        infillDensity: validated?.infillDensity ?? 20,
+        infillAngle: validated?.infillAngle ?? 45,
+        includeWalls: validated?.includeWalls ?? true,
+        includeInfill: validated?.includeInfill ?? true,
+        includeTravel: validated?.includeTravel ?? false,
+      };
+      
+      // Execute slicer synchronously (fallback mode - fast pattern generation)
+      try {
+        const plainPaths = toPlainPaths(inputPaths);
+        const sliceResult = slicePathsSync(plainPaths, settings);
+        paths = toColoredPaths(sliceResult, nodeColor);
+        
+        // Clear any previous error
+        if (nodeData.error) {
+          const event = new CustomEvent('nodeDataChange', {
+            detail: { nodeId: node.id, field: 'error', value: undefined },
+          });
+          window.dispatchEvent(event);
+        }
+      } catch (err) {
+        // Store error in node data
+        const error = err instanceof Error ? err.message : String(err);
+        const event = new CustomEvent('nodeDataChange', {
+          detail: { nodeId: node.id, field: 'error', value: error },
+        });
+        window.dispatchEvent(event);
+      }
     } else if (node.type === 'group') {
       // Group node - collect paths from child nodes that are terminal (output not connected to siblings)
       const childNodes = nodes.filter((n) => n.parentId === nodeId);

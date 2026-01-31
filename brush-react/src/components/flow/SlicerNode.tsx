@@ -144,7 +144,8 @@ function SlicerNodeComponent({ data, id }: SlicerNodeProps) {
             max="100"
             value={data.infillDensity || 20}
             onChange={(e) => handleChange('infillDensity', parseInt(e.target.value))}
-            className="flex-1 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500"
+            onPointerDownCapture={(e) => e.stopPropagation()}
+            className="flex-1 h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 nodrag"
           />
           <span className="text-xs text-slate-500 w-8 text-right">{data.infillDensity || 20}%</span>
         </div>
@@ -194,7 +195,8 @@ function SlicerNodeComponent({ data, id }: SlicerNodeProps) {
               type="number"
               value={data.extrudeHeight || 10}
               onChange={(e) => handleChange('extrudeHeight', parseFloat(e.target.value) || 10)}
-              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14"
+              onPointerDownCapture={(e) => e.stopPropagation()}
+              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14 nodrag"
               step="1"
               min="0.1"
             />
@@ -208,7 +210,8 @@ function SlicerNodeComponent({ data, id }: SlicerNodeProps) {
               type="number"
               value={data.layerHeight || 0.2}
               onChange={(e) => handleChange('layerHeight', parseFloat(e.target.value) || 0.2)}
-              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14"
+              onPointerDownCapture={(e) => e.stopPropagation()}
+              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14 nodrag"
               step="0.05"
               min="0.05"
               max="1"
@@ -223,7 +226,8 @@ function SlicerNodeComponent({ data, id }: SlicerNodeProps) {
               type="number"
               value={data.wallThickness || 0.8}
               onChange={(e) => handleChange('wallThickness', parseFloat(e.target.value) || 0.8)}
-              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14"
+              onPointerDownCapture={(e) => e.stopPropagation()}
+              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14 nodrag"
               step="0.1"
               min="0.1"
             />
@@ -237,7 +241,8 @@ function SlicerNodeComponent({ data, id }: SlicerNodeProps) {
               type="number"
               value={data.infillAngle || 45}
               onChange={(e) => handleChange('infillAngle', parseFloat(e.target.value) || 45)}
-              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14"
+              onPointerDownCapture={(e) => e.stopPropagation()}
+              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14 nodrag"
               step="15"
               min="0"
               max="180"
@@ -252,7 +257,8 @@ function SlicerNodeComponent({ data, id }: SlicerNodeProps) {
               type="number"
               value={data.extractLayer ?? -1}
               onChange={(e) => handleChange('extractLayer', parseInt(e.target.value))}
-              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14"
+              onPointerDownCapture={(e) => e.stopPropagation()}
+              className="flex-1 bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-indigo-500 focus:outline-none w-14 nodrag"
               min="-1"
             />
             <span className="text-xs text-slate-500 truncate" title="-1 = all layers">

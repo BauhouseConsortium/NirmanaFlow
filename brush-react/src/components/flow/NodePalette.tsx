@@ -35,7 +35,7 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
       halftone: '∿',
       ascii: 'Aa',
       mask: '◐',
-      // slicer: '⬢', // Disabled for now
+      slicer: '⬢',
     };
     return icons[type] || '•';
   };
@@ -164,7 +164,7 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
           </div>
         </div>
 
-        {/* Slicer - disabled for now
+        {/* Slicer */}
         <div className="mb-2">
           <h4 className="text-xs font-medium text-indigo-400 mb-2 uppercase tracking-wider px-1">Slicer</h4>
           <div className="grid grid-cols-2 gap-1">
@@ -181,7 +181,6 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
             ))}
           </div>
         </div>
-        */}
       </div>
 
       {/* Footer tip */}

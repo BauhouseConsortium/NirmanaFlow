@@ -34,7 +34,7 @@ import { ImageNode } from './ImageNode';
 import { HalftoneNode } from './HalftoneNode';
 import { AsciiNode } from './AsciiNode';
 import { MaskNode } from './MaskNode';
-// import { SlicerNode } from './SlicerNode'; // Disabled for now - may re-enable later
+import { SlicerNode } from './SlicerNode';
 import { CustomEdge } from './CustomEdge';
 import { NodePalette } from './NodePalette';
 import { GlyphEditor } from './GlyphEditor';
@@ -62,7 +62,7 @@ const nodeTypes = {
   halftone: HalftoneNode,
   ascii: AsciiNode,
   mask: MaskNode,
-  // slicer: SlicerNode, // Disabled for now - may re-enable later
+  slicer: SlicerNode,
 };
 
 // Define custom edge types

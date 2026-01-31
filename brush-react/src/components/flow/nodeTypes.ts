@@ -317,10 +317,9 @@ export const nodeCategories = {
     { type: 'ascii', label: 'ASCII', description: 'Convert image to ASCII art pattern' },
     { type: 'mask', label: 'Mask', description: 'Clip paths using B&W image as mask' },
   ],
-  // Slicer disabled for now - may re-enable later
-  // slicer: [
-  //   { type: 'slicer', label: 'Slicer', description: '3D slicer infill patterns (lines, grid, honeycomb, gyroid)' },
-  // ],
+  slicer: [
+    { type: 'slicer', label: 'Slicer', description: '3D slicer infill patterns (lines, grid, honeycomb, gyroid)' },
+  ],
 } as const;
 
 // Default values for each node type
@@ -461,21 +460,20 @@ return output;
     invert: false,
     feather: 0,
   },
-  // Slicer disabled for now - may re-enable later
-  // slicer: {
-  //   label: 'Slicer',
-  //   extrudeHeight: 10,
-  //   wallThickness: 0.8,
-  //   layerHeight: 0.2,
-  //   extractLayer: -1,
-  //   infillPattern: 'grid',
-  //   infillDensity: 20,
-  //   infillAngle: 45,
-  //   includeWalls: true,
-  //   includeInfill: true,
-  //   includeTravel: false,
-  //   isSlicing: false,
-  //   sliceProgress: 0,
-  // },
+  slicer: {
+    label: 'Slicer',
+    extrudeHeight: 10,
+    wallThickness: 0.8,
+    layerHeight: 0.2,
+    extractLayer: -1,
+    infillPattern: 'grid',
+    infillDensity: 20,
+    infillAngle: 45,
+    includeWalls: true,
+    includeInfill: true,
+    includeTravel: false,
+    isSlicing: false,
+    sliceProgress: 0,
+  },
   output: { label: 'Output' },
 };
