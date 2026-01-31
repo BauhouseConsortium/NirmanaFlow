@@ -194,6 +194,8 @@ export interface HalftoneNodeData extends NodeData {
   angle: number;
   sampleResolution: number;
   invert: boolean;
+  flipX: boolean;
+  flipY: boolean;
   outputWidth: number;
   outputHeight: number;
 }
@@ -389,6 +391,8 @@ return output;
     angle: 0,
     sampleResolution: 100,
     invert: false,
+    flipX: false,
+    flipY: true,
     outputWidth: 100,
     outputHeight: 100,
   },

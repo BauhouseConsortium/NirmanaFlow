@@ -1,4 +1,4 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useRef, useEffect, useState } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
 interface HalftoneNodeData extends Record<string, unknown> {
@@ -11,6 +11,8 @@ interface HalftoneNodeData extends Record<string, unknown> {
   angle: number;
   sampleResolution: number;
   invert: boolean;
+  flipX: boolean;
+  flipY: boolean;
   outputWidth: number;
   outputHeight: number;
   color?: 1 | 2 | 3 | 4;
@@ -35,21 +37,100 @@ interface SliderFieldProps {
   onChange: (field: string, value: number) => void;
 }
 
+// Slider with local state for real-time display, debounced commit
 function SliderField({ label, value, min, max, step, field, unit, onChange }: SliderFieldProps) {
+  const [localValue, setLocalValue] = useState<number>(value);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Sync local value when prop changes (from external updates)
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+  
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = parseFloat(e.target.value);
+    setLocalValue(newValue); // Update immediately for visual feedback
+    
+    // Debounce the actual change
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onChange(field, newValue);
+    }, 200);
+  };
+  
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs">
         <label className="text-slate-400">{label}</label>
-        <span className="text-slate-300">{value}{unit || ''}</span>
+        <span className="text-slate-300">{localValue}{unit || ''}</span>
       </div>
       <input
         type="range"
         min={min}
         max={max}
         step={step}
-        value={value}
-        onChange={(e) => onChange(field, parseFloat(e.target.value))}
+        value={localValue}
+        onChange={handleChange}
         className="nodrag w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-rose-500"
+      />
+    </div>
+  );
+}
+
+// Number input with local state for real-time display, debounced commit
+interface NumberFieldProps {
+  label: string;
+  value: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  field: string;
+  onChange: (field: string, value: number) => void;
+}
+
+function NumberField({ label, value, min, max, step, field, onChange }: NumberFieldProps) {
+  const [localValue, setLocalValue] = useState<number>(value);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  useEffect(() => {
+    setLocalValue(value);
+  }, [value]);
+  
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+  
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newValue = parseFloat(e.target.value) || 0;
+    const clampedValue = min !== undefined ? Math.max(min, newValue) : newValue;
+    setLocalValue(clampedValue);
+    
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onChange(field, clampedValue);
+    }, 300);
+  };
+  
+  return (
+    <div className="space-y-1">
+      <label className="text-xs text-slate-400">{label}</label>
+      <input
+        type="number"
+        value={localValue}
+        min={min}
+        max={max}
+        step={step}
+        onChange={handleChange}
+        className="nodrag w-full bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-rose-500 focus:outline-none"
       />
     </div>
   );
@@ -79,6 +160,8 @@ function HalftoneNodeComponent({ data, id }: HalftoneNodeProps) {
     angle = 0,
     sampleResolution = 100,
     invert = false,
+    flipX = false,
+    flipY = true,
     outputWidth = 100,
     outputHeight = 100,
     color,
@@ -140,24 +223,20 @@ function HalftoneNodeComponent({ data, id }: HalftoneNodeProps) {
 
         {/* Output size */}
         <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <label className="text-xs text-slate-400">Width</label>
-            <input
-              type="number"
-              value={outputWidth}
-              onChange={(e) => handleChange('outputWidth', Math.max(10, parseFloat(e.target.value) || 100))}
-              className="nodrag w-full bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-rose-500 focus:outline-none"
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="text-xs text-slate-400">Height</label>
-            <input
-              type="number"
-              value={outputHeight}
-              onChange={(e) => handleChange('outputHeight', Math.max(10, parseFloat(e.target.value) || 100))}
-              className="nodrag w-full bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-rose-500 focus:outline-none"
-            />
-          </div>
+          <NumberField
+            label="Width"
+            value={outputWidth}
+            min={10}
+            field="outputWidth"
+            onChange={handleChange}
+          />
+          <NumberField
+            label="Height"
+            value={outputHeight}
+            min={10}
+            field="outputHeight"
+            onChange={handleChange}
+          />
         </div>
 
         {/* Spacing controls */}
@@ -188,30 +267,24 @@ function HalftoneNodeComponent({ data, id }: HalftoneNodeProps) {
         <div className="space-y-2">
           <div className="text-xs text-slate-400">Amplitude Range</div>
           <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <label className="text-xs text-slate-500">Min (light)</label>
-              <input
-                type="number"
-                value={minAmplitude}
-                min={0}
-                max={maxAmplitude}
-                step={0.05}
-                onChange={(e) => handleChange('minAmplitude', parseFloat(e.target.value) || 0)}
-                className="nodrag w-full bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-rose-500 focus:outline-none"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs text-slate-500">Max (dark)</label>
-              <input
-                type="number"
-                value={maxAmplitude}
-                min={minAmplitude}
-                max={10}
-                step={0.05}
-                onChange={(e) => handleChange('maxAmplitude', parseFloat(e.target.value) || 1)}
-                className="nodrag w-full bg-slate-700 text-white text-xs px-2 py-1 rounded border border-slate-600 focus:border-rose-500 focus:outline-none"
-              />
-            </div>
+            <NumberField
+              label="Min (light)"
+              value={minAmplitude}
+              min={0}
+              max={maxAmplitude}
+              step={0.05}
+              field="minAmplitude"
+              onChange={handleChange}
+            />
+            <NumberField
+              label="Max (dark)"
+              value={maxAmplitude}
+              min={minAmplitude}
+              max={10}
+              step={0.05}
+              field="maxAmplitude"
+              onChange={handleChange}
+            />
           </div>
         </div>
 
@@ -253,6 +326,40 @@ function HalftoneNodeComponent({ data, id }: HalftoneNodeProps) {
               }`}
             />
           </button>
+        </div>
+
+        {/* Flip controls */}
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-400">Flip X</label>
+            <button
+              onClick={() => handleChange('flipX', !flipX)}
+              className={`nodrag w-8 h-4 rounded-full transition-colors ${
+                flipX ? 'bg-rose-500' : 'bg-slate-600'
+              }`}
+            >
+              <div
+                className={`w-3 h-3 rounded-full bg-white shadow transform transition-transform ${
+                  flipX ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-slate-400">Flip Y</label>
+            <button
+              onClick={() => handleChange('flipY', !flipY)}
+              className={`nodrag w-8 h-4 rounded-full transition-colors ${
+                flipY ? 'bg-rose-500' : 'bg-slate-600'
+              }`}
+            >
+              <div
+                className={`w-3 h-3 rounded-full bg-white shadow transform transition-transform ${
+                  flipY ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </div>
 

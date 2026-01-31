@@ -1,4 +1,4 @@
-import { memo, useCallback, useRef } from 'react';
+import { memo, useCallback, useRef, useEffect } from 'react';
 import { Handle, Position } from '@xyflow/react';
 
 interface ImageNodeData extends Record<string, unknown> {
@@ -17,12 +17,41 @@ type ImageNodeProps = {
 
 function ImageNodeComponent({ data, id }: ImageNodeProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const debounceTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
-  const handleFieldChange = useCallback((field: string, value: unknown) => {
-    const event = new CustomEvent('nodeDataChange', {
-      detail: { nodeId: id, field, value },
-    });
-    window.dispatchEvent(event);
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      debounceTimers.current.forEach((timer) => clearTimeout(timer));
+    };
+  }, []);
+
+  const handleFieldChange = useCallback((field: string, value: unknown, immediate = false) => {
+    // Clear existing timer for this field
+    const existingTimer = debounceTimers.current.get(field);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+    
+    // Image data should update immediately, other fields can be debounced
+    if (immediate) {
+      const event = new CustomEvent('nodeDataChange', {
+        detail: { nodeId: id, field, value },
+      });
+      window.dispatchEvent(event);
+      return;
+    }
+    
+    // Set new debounced timer
+    const timer = setTimeout(() => {
+      const event = new CustomEvent('nodeDataChange', {
+        detail: { nodeId: id, field, value },
+      });
+      window.dispatchEvent(event);
+      debounceTimers.current.delete(field);
+    }, 150);
+    
+    debounceTimers.current.set(field, timer);
   }, [id]);
 
   const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -42,11 +71,11 @@ function ImageNodeComponent({ data, id }: ImageNodeProps) {
       // Get image dimensions
       const img = new Image();
       img.onload = () => {
-        // Update node data with image info
-        handleFieldChange('imageData', dataUrl);
-        handleFieldChange('width', img.width);
-        handleFieldChange('height', img.height);
-        handleFieldChange('filename', file.name);
+        // Update node data with image info (immediate, no debounce)
+        handleFieldChange('imageData', dataUrl, true);
+        handleFieldChange('width', img.width, true);
+        handleFieldChange('height', img.height, true);
+        handleFieldChange('filename', file.name, true);
       };
       img.src = dataUrl;
     };
@@ -54,10 +83,10 @@ function ImageNodeComponent({ data, id }: ImageNodeProps) {
   }, [handleFieldChange]);
 
   const handleClear = useCallback(() => {
-    handleFieldChange('imageData', undefined);
-    handleFieldChange('width', undefined);
-    handleFieldChange('height', undefined);
-    handleFieldChange('filename', undefined);
+    handleFieldChange('imageData', undefined, true);
+    handleFieldChange('width', undefined, true);
+    handleFieldChange('height', undefined, true);
+    handleFieldChange('filename', undefined, true);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }

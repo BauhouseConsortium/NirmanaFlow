@@ -203,6 +203,8 @@ export const HalftoneNodeDataSchema = BaseNodeDataSchema.extend({
   angle: z.number().min(-180).max(180),
   sampleResolution: z.number().int().min(10).max(500),
   invert: z.boolean(),
+  flipX: z.boolean(),
+  flipY: z.boolean(),
   outputWidth: z.number().min(10).max(500),
   outputHeight: z.number().min(10).max(500),
 });

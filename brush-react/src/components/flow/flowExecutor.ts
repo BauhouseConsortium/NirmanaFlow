@@ -38,11 +38,20 @@ export class FlowExecutionCache {
 
   /**
    * Extract only data-relevant fields from node (exclude position, selection, etc.)
+   * For image nodes, use a shorter identifier instead of the full base64 data
    */
   private getRelevantNodeData(node: Node): Record<string, unknown> {
     const data = node.data as Record<string, unknown>;
     // Filter out UI-only fields
     const { selected, dragging, ...relevantData } = data;
+    
+    // For image nodes, replace imageData with a short hash to avoid expensive full hashing
+    if (node.type === 'image' && relevantData.imageData) {
+      const imageData = relevantData.imageData as string;
+      // Use first 100 chars + length as a fast identifier
+      relevantData.imageData = `img:${imageData.length}:${imageData.slice(0, 100)}`;
+    }
+    
     return {
       type: node.type,
       ...relevantData,
@@ -240,6 +249,8 @@ interface HalftoneSettings {
   angle: number;
   sampleResolution: number;
   invert: boolean;
+  flipX: boolean;
+  flipY: boolean;
   outputWidth: number;
   outputHeight: number;
 }
@@ -304,14 +315,16 @@ function getWaveOffset(phase: number, amplitude: number, mode: WaveMode): number
 }
 
 // Cache for image data to avoid re-parsing
+// Version 3: Flip both X and Y
 const imageDataCache = new Map<string, ImageData>();
+const IMAGE_CACHE_VERSION = 3;
 
 /**
  * Load image from base64 data URL and get pixel data
  */
 function loadImageData(dataUrl: string, targetWidth: number, targetHeight: number): ImageData | null {
-  // Check cache first (keyed by dataUrl + dimensions)
-  const cacheKey = `${dataUrl.slice(0, 100)}_${targetWidth}_${targetHeight}`;
+  // Check cache first (keyed by dataUrl + dimensions + version)
+  const cacheKey = `v${IMAGE_CACHE_VERSION}_${dataUrl.slice(0, 100)}_${targetWidth}_${targetHeight}`;
   if (imageDataCache.has(cacheKey)) {
     return imageDataCache.get(cacheKey)!;
   }
@@ -354,22 +367,43 @@ function loadImageData(dataUrl: string, targetWidth: number, targetHeight: numbe
 
 /**
  * Get brightness (0-1) at a specific position in the image data
+ * Uses bilinear interpolation for smoother results
  */
 function getBrightness(imageData: ImageData, x: number, y: number): number {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
+  // Clamp to valid range
+  const maxX = imageData.width - 1;
+  const maxY = imageData.height - 1;
   
-  if (ix < 0 || ix >= imageData.width || iy < 0 || iy >= imageData.height) {
+  if (x < 0 || x > maxX || y < 0 || y > maxY) {
     return 1; // Return white for out of bounds
   }
   
-  const idx = (iy * imageData.width + ix) * 4;
-  const r = imageData.data[idx];
-  const g = imageData.data[idx + 1];
-  const b = imageData.data[idx + 2];
+  // Bilinear interpolation for smooth brightness
+  const x0 = Math.floor(x);
+  const y0 = Math.floor(y);
+  const x1 = Math.min(x0 + 1, maxX);
+  const y1 = Math.min(y0 + 1, maxY);
+  const fx = x - x0;
+  const fy = y - y0;
   
-  // Convert to grayscale using luminance formula
-  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  const getPixelBrightness = (px: number, py: number): number => {
+    const idx = (py * imageData.width + px) * 4;
+    const r = imageData.data[idx];
+    const g = imageData.data[idx + 1];
+    const b = imageData.data[idx + 2];
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  };
+  
+  // Bilinear interpolation
+  const b00 = getPixelBrightness(x0, y0);
+  const b10 = getPixelBrightness(x1, y0);
+  const b01 = getPixelBrightness(x0, y1);
+  const b11 = getPixelBrightness(x1, y1);
+  
+  const b0 = b00 * (1 - fx) + b10 * fx;
+  const b1 = b01 * (1 - fx) + b11 * fx;
+  
+  return b0 * (1 - fy) + b1 * fy;
 }
 
 /**
@@ -386,6 +420,8 @@ function generateHalftonePattern(imageDataUrl: string, settings: HalftoneSetting
     angle,
     sampleResolution,
     invert,
+    flipX,
+    flipY,
     outputWidth,
     outputHeight,
   } = settings;
@@ -423,7 +459,10 @@ function generateHalftonePattern(imageDataUrl: string, settings: HalftoneSetting
     const path: Point[] = [];
     
     // Generate points along the line
-    const numPoints = Math.ceil(diagonal / 0.5); // Sample every 0.5mm
+    // For smooth curves, we need ~30 points per wave cycle
+    const pointsPerWave = 32;
+    const stepSize = waveLength / pointsPerWave;
+    const numPoints = Math.ceil(diagonal / stepSize);
     
     for (let j = 0; j <= numPoints; j++) {
       const t = j / numPoints;
@@ -444,9 +483,11 @@ function generateHalftonePattern(imageDataUrl: string, settings: HalftoneSetting
         continue;
       }
       
-      // Sample image brightness at this position
-      const sampleX = (xWorld / outputWidth) * (sampleWidth - 1);
-      const sampleY = (yWorld / outputHeight) * (sampleHeight - 1);
+      // Sample image brightness at this position (apply flip settings)
+      const normalizedX = xWorld / outputWidth;
+      const normalizedY = yWorld / outputHeight;
+      const sampleX = (flipX ? 1 - normalizedX : normalizedX) * (sampleWidth - 1);
+      const sampleY = (flipY ? 1 - normalizedY : normalizedY) * (sampleHeight - 1);
       let brightness = getBrightness(imageData, sampleX, sampleY);
       
       if (invert) {
@@ -1836,6 +1877,8 @@ export function executeFlowGraph(
           angle?: number;
           sampleResolution?: number;
           invert?: boolean;
+          flipX?: boolean;
+          flipY?: boolean;
           outputWidth?: number;
           outputHeight?: number;
         };
@@ -1850,6 +1893,8 @@ export function executeFlowGraph(
             angle: halftoneData.angle ?? 0,
             sampleResolution: halftoneData.sampleResolution ?? 100,
             invert: halftoneData.invert ?? false,
+            flipX: halftoneData.flipX ?? false,
+            flipY: halftoneData.flipY ?? true,
             outputWidth: halftoneData.outputWidth ?? 100,
             outputHeight: halftoneData.outputHeight ?? 100,
           }),

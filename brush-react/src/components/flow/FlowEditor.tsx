@@ -319,10 +319,26 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
   // Determine if panning is active (either mode or space held)
   const isPanning = isPanMode || isSpacePressed;
 
-  // Execute flow when nodes or edges change (with persistent cache)
+  // Execute flow when nodes or edges change (with persistent cache + debounce)
+  const executeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
   useEffect(() => {
-    const result = executeFlow(nodes, edges, executionCacheRef.current);
-    onChange?.(result.paths, result);
+    // Clear any pending execution
+    if (executeTimeoutRef.current) {
+      clearTimeout(executeTimeoutRef.current);
+    }
+    
+    // Debounce execution (50ms) to avoid running on every drag frame
+    executeTimeoutRef.current = setTimeout(() => {
+      const result = executeFlow(nodes, edges, executionCacheRef.current);
+      onChange?.(result.paths, result);
+    }, 50);
+    
+    return () => {
+      if (executeTimeoutRef.current) {
+        clearTimeout(executeTimeoutRef.current);
+      }
+    };
   }, [nodes, edges, onChange]);
 
   // Listen for glyph editor open event
