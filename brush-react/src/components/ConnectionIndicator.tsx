@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import type { ConnectionState, MachineState, MachinePosition } from '../hooks/useFluidNC';
+import type { ConnectionState, MachineState, PositionData } from '../hooks/useFluidNC';
 import { ConnectionHelpModal } from './ConnectionHelpModal';
 
 interface ConnectionIndicatorProps {
   connectionState: ConnectionState;
   machineState: MachineState;
-  position: MachinePosition;
+  position: PositionData;
   host: string;
   onConnect: () => void;
   onDisconnect: () => void;
@@ -83,7 +83,7 @@ export function ConnectionIndicator({
               {machineState}
             </span>
             <span className="text-slate-500 font-mono">
-              X{position.x.toFixed(1)} Y{position.y.toFixed(1)} Z{position.z.toFixed(1)}
+              <span className="text-slate-600">{position.type}:</span> X{position.coords.x.toFixed(1)} Y{position.coords.y.toFixed(1)} Z{position.coords.z.toFixed(1)}
             </span>
           </div>
         )}

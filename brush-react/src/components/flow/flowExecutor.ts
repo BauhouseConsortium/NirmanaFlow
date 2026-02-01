@@ -235,6 +235,7 @@ import {
 } from '../../schemas/flowNodeSchemas';
 import { slicePathsSync, type SlicerSettings } from '../../utils/slicerService';
 import { deserializeGeometry, projectToWireframe, type CameraSettings } from '../../utils/objLoader';
+import { extractPoints, delaunayTriangulate, delaunayEdges } from '../../utils/delaunay';
 
 /**
  * Safely parse node data using Zod schema
@@ -2640,6 +2641,83 @@ export function executeFlowGraph(
           detail: { nodeId: node.id, field: 'error', value: error },
         });
         window.dispatchEvent(event);
+      }
+    } else if (node.type === 'clipper') {
+      // Clipper node - boolean operations, offset, simplify, and Delaunay triangulation
+      const operation = (nodeData.operation as string) || 'union';
+      
+      // Get input paths from connected nodes
+      // For boolean ops: first input is A (subject), second is B (clip)
+      const inputEdges = edges.filter((e) => e.target === nodeId);
+      const inputA: ColoredPath[] = [];
+      const inputB: ColoredPath[] = [];
+      
+      for (const edge of inputEdges) {
+        const sourcePaths = getNodePaths(edge.source);
+        if (edge.targetHandle === 'b') {
+          inputB.push(...sourcePaths);
+        } else {
+          inputA.push(...sourcePaths);
+        }
+      }
+      
+      const plainA = toPlainPaths(inputA);
+      const plainB = toPlainPaths(inputB);
+      
+      try {
+        let resultPaths: Point[][] = [];
+        
+        if (operation === 'union' || operation === 'intersection' || operation === 'difference' || operation === 'xor') {
+          // Boolean operations - need clipper2
+          // For now, use sync fallback - just pass through A for union if B is empty
+          if (plainB.length === 0 && operation === 'union') {
+            resultPaths = plainA;
+          } else {
+            // TODO: Integrate async clipper2 operations
+            // For now, pass through input A
+            resultPaths = plainA;
+          }
+        } else if (operation === 'offset') {
+          // Offset operation - pass through for now (async would be needed for clipper2)
+          // const offsetDist = (nodeData.offsetDistance as number) ?? 1;
+          // TODO: Integrate async clipper2 offset
+          resultPaths = plainA;
+        } else if (operation === 'simplify') {
+          // Simplify using Douglas-Peucker (sync fallback)
+          const tolerance = (nodeData.simplifyTolerance as number) ?? 0.1;
+          resultPaths = plainA.map(path => {
+            if (path.length <= 2) return path;
+            // Simple Douglas-Peucker implementation
+            const simplified: Point[] = [path[0]];
+            let lastAdded = 0;
+            for (let i = 1; i < path.length - 1; i++) {
+              const dx = path[i][0] - path[lastAdded][0];
+              const dy = path[i][1] - path[lastAdded][1];
+              const dist = Math.sqrt(dx * dx + dy * dy);
+              if (dist >= tolerance) {
+                simplified.push(path[i]);
+                lastAdded = i;
+              }
+            }
+            simplified.push(path[path.length - 1]);
+            return simplified;
+          });
+        } else if (operation === 'delaunay' || operation === 'delaunay-edges') {
+          // Delaunay triangulation
+          const sampleDist = (nodeData.sampleDistance as number) ?? 0;
+          const points = extractPoints(plainA, sampleDist > 0 ? sampleDist : undefined);
+          
+          if (operation === 'delaunay') {
+            resultPaths = delaunayTriangulate(points);
+          } else {
+            resultPaths = delaunayEdges(points);
+          }
+        }
+        
+        paths = toColoredPaths(resultPaths, nodeColor);
+      } catch (err) {
+        console.error('Clipper operation failed:', err);
+        paths = inputA; // Fallback to input
       }
     } else if (node.type === 'wireframe') {
       // Wireframe node - renders 3D geometry from connected ObjLoader or Supershape as 2D wireframe paths

@@ -20,6 +20,7 @@ export { SlicerNode } from './SlicerNode';
 export { ObjLoaderNode } from './ObjLoaderNode';
 export { WireframeNode } from './WireframeNode';
 export { SupershapeNode } from './SupershapeNode';
+export { ClipperNode } from './ClipperNode';
 export { CodeEditorModal } from './CodeEditorModal';
 export { CustomEdge } from './CustomEdge';
 export { NodePalette } from './NodePalette';

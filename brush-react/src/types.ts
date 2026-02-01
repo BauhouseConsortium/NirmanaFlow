@@ -39,6 +39,14 @@ export interface Settings {
   minSegmentLength: number;
 }
 
+export interface MachineProfile {
+  id: string;
+  name: string;
+  settings: Settings;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface GeneratedGCode {
   gcode: string;
   lines: string[];

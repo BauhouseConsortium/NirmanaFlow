@@ -27,7 +27,19 @@ export default function App() {
   const [showPreviewPane, setShowPreviewPane] = useState(true);
   const [showJogModal, setShowJogModal] = useState(false);
 
-  const { settings, updateSetting, resetSettings, loadSettings } = useVectorSettings();
+  const {
+    settings,
+    updateSetting,
+    resetSettings,
+    loadSettings,
+    profiles,
+    activeProfileId,
+    loadProfile,
+    saveAsProfile,
+    updateProfile,
+    deleteProfile,
+    renameProfile,
+  } = useVectorSettings();
   const { showSplash, dismissSplash, resetSplash } = useSplashScreen();
   const colorWells = useMemo(() => getColorWells(settings), [settings]);
   const { logs, log, clear } = useConsole();
@@ -535,6 +547,13 @@ export default function App() {
                           onSetColorWellPosition={handleSetColorWellPosition}
                           onJogToPosition={fluidNC.goToXY}
                           isConnected={fluidNC.isConnected}
+                          profiles={profiles}
+                          activeProfileId={activeProfileId}
+                          onLoadProfile={loadProfile}
+                          onSaveAsProfile={saveAsProfile}
+                          onUpdateProfile={updateProfile}
+                          onDeleteProfile={deleteProfile}
+                          onRenameProfile={renameProfile}
                         />
                       </div>
                     </Allotment.Pane>

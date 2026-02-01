@@ -38,6 +38,7 @@ import { SlicerNode } from './SlicerNode';
 import { ObjLoaderNode } from './ObjLoaderNode';
 import { WireframeNode } from './WireframeNode';
 import { SupershapeNode } from './SupershapeNode';
+import { ClipperNode } from './ClipperNode';
 import { CustomEdge } from './CustomEdge';
 import { NodePalette } from './NodePalette';
 import { GlyphEditor } from './GlyphEditor';
@@ -69,6 +70,7 @@ const nodeTypes = {
   objloader: ObjLoaderNode,
   wireframe: WireframeNode,
   supershape: SupershapeNode,
+  clipper: ClipperNode,
 };
 
 // Define custom edge types
@@ -236,6 +238,8 @@ function FlowEditorInner({ onChange }: FlowEditorProps) {
         nodeType = 'wireframe';
       } else if (type === 'supershape') {
         nodeType = 'supershape';
+      } else if (type === 'clipper') {
+        nodeType = 'clipper';
       }
 
       const newNode: Node = {

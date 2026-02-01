@@ -36,6 +36,7 @@ function NodePaletteComponent({ onAddNode }: NodePaletteProps) {
       ascii: 'Aa',
       mask: '◐',
       slicer: '⬢',
+      clipper: '✂',
       objloader: '📦',
       supershape: '✦',
       wireframe: '◇',

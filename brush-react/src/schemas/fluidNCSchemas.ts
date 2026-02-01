@@ -18,12 +18,21 @@ export type StreamingState = z.infer<typeof StreamingStateSchema>;
 
 // ============ Position Schema ============
 
+export const PositionTypeSchema = z.enum(['MPos', 'WPos']);
+export type PositionType = z.infer<typeof PositionTypeSchema>;
+
 export const MachinePositionSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
   z: z.number().finite(),
 });
 export type MachinePosition = z.infer<typeof MachinePositionSchema>;
+
+export const PositionDataSchema = z.object({
+  coords: MachinePositionSchema,
+  type: PositionTypeSchema,
+});
+export type PositionData = z.infer<typeof PositionDataSchema>;
 
 // ============ Override Schema ============
 
@@ -39,7 +48,7 @@ export type Override = z.infer<typeof OverrideSchema>;
 export const FluidNCStatusSchema = z.object({
   connectionState: ConnectionStateSchema,
   machineState: MachineStateSchema,
-  position: MachinePositionSchema,
+  position: PositionDataSchema,
   feedRate: z.number().min(0),
   spindleSpeed: z.number().min(0),
   override: OverrideSchema.optional(),
@@ -67,7 +76,7 @@ export type StreamingProgress = z.infer<typeof StreamingProgressSchema>;
 export const INITIAL_STATUS: FluidNCStatus = {
   connectionState: 'disconnected',
   machineState: 'Unknown',
-  position: { x: 0, y: 0, z: 0 },
+  position: { coords: { x: 0, y: 0, z: 0 }, type: 'WPos' },
   feedRate: 0,
   spindleSpeed: 0,
   lastMessage: '',
@@ -165,14 +174,17 @@ export function parseStatusMessage(data: string): Partial<FluidNCStatus> | null 
     const value = field.substring(colonIndex + 1);
 
     switch (key) {
-      case 'MPos':
       case 'WPos': {
-        const position = parsePosition(value);
-        if (position) {
-          updates.position = position;
+        // Only subscribe to Work Position, ignore Machine Position
+        const coords = parsePosition(value);
+        if (coords) {
+          updates.position = { coords, type: 'WPos' };
         }
         break;
       }
+      case 'MPos':
+        // Ignore Machine Position
+        break;
       case 'FS': {
         const fs = parseFeedSpindle(value);
         if (fs) {
@@ -206,13 +218,14 @@ export function validateStatus(status: unknown): FluidNCStatus | null {
  * Check if position has meaningfully changed (threshold-based)
  */
 export function hasPositionChanged(
-  prev: MachinePosition,
-  next: MachinePosition,
+  prev: PositionData,
+  next: PositionData,
   threshold = 0.01
 ): boolean {
   return (
-    Math.abs(prev.x - next.x) > threshold ||
-    Math.abs(prev.y - next.y) > threshold ||
-    Math.abs(prev.z - next.z) > threshold
+    prev.type !== next.type ||
+    Math.abs(prev.coords.x - next.coords.x) > threshold ||
+    Math.abs(prev.coords.y - next.coords.y) > threshold ||
+    Math.abs(prev.coords.z - next.coords.z) > threshold
   );
 }

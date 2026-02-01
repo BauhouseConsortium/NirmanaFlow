@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import type { MachinePosition, MachineState } from '../hooks/useFluidNC';
+import type { PositionData, MachineState } from '../hooks/useFluidNC';
 
 interface JogControlProps {
   isConnected: boolean;
   machineState: MachineState;
-  position: MachinePosition;
+  position: PositionData;
   onJog: (axis: 'X' | 'Y' | 'Z', distance: number) => void;
   onHome: () => void;
   onUnlock: () => void;
@@ -93,18 +93,23 @@ export function JogControl({
       </div>
 
       {/* Position Display */}
-      <div className="grid grid-cols-3 gap-2 text-center text-xs">
-        <div className="bg-slate-800 rounded-lg p-2">
-          <div className="text-slate-500">X</div>
-          <div className="font-mono text-blue-400">{position.x.toFixed(2)}</div>
+      <div className="space-y-1">
+        <div className="text-xs text-slate-500 text-center">
+          {position.type === 'MPos' ? 'Machine Position' : 'Work Position'}
         </div>
-        <div className="bg-slate-800 rounded-lg p-2">
-          <div className="text-slate-500">Y</div>
-          <div className="font-mono text-green-400">{position.y.toFixed(2)}</div>
-        </div>
-        <div className="bg-slate-800 rounded-lg p-2">
-          <div className="text-slate-500">Z</div>
-          <div className="font-mono text-red-400">{position.z.toFixed(2)}</div>
+        <div className="grid grid-cols-3 gap-2 text-center text-xs">
+          <div className="bg-slate-800 rounded-lg p-2">
+            <div className="text-slate-500">X</div>
+            <div className="font-mono text-blue-400">{position.coords.x.toFixed(2)}</div>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-2">
+            <div className="text-slate-500">Y</div>
+            <div className="font-mono text-green-400">{position.coords.y.toFixed(2)}</div>
+          </div>
+          <div className="bg-slate-800 rounded-lg p-2">
+            <div className="text-slate-500">Z</div>
+            <div className="font-mono text-red-400">{position.coords.z.toFixed(2)}</div>
+          </div>
         </div>
       </div>
 

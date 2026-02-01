@@ -1,5 +1,10 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { z } from 'zod';
+
+// LocalStorage keys
+const STORAGE_KEY = 'brush-vector-settings';
+const PROFILES_KEY = 'brush-vector-profiles';
+const ACTIVE_PROFILE_KEY = 'brush-active-vector-profile';
 
 // Zod schema with validation constraints
 export const VectorSettingsSchema = z.object({
@@ -93,6 +98,136 @@ export const PartialVectorSettingsSchema = VectorSettingsSchema.partial();
 // Default settings derived from schema
 const DEFAULT_SETTINGS: VectorSettings = VectorSettingsSchema.parse({});
 
+// Machine profile type
+export interface MachineProfile {
+  id: string;
+  name: string;
+  settings: VectorSettings;
+  createdAt: number;
+  updatedAt: number;
+  isBuiltIn?: boolean;
+}
+
+// Built-in machine presets
+const BUILT_IN_PROFILES: MachineProfile[] = [
+  {
+    id: 'default',
+    name: 'Default',
+    settings: DEFAULT_SETTINGS,
+    createdAt: 0,
+    updatedAt: 0,
+    isBuiltIn: true,
+  },
+  {
+    id: 'axidraw-v3',
+    name: 'AxiDraw V3',
+    settings: VectorSettingsSchema.parse({
+      canvasWidth: 297,
+      canvasHeight: 210,
+      targetWidth: 280,
+      targetHeight: 200,
+      feedRate: 3000,
+      safeZ: 3,
+      backlashX: 0,
+      backlashY: 0,
+      controllerHost: 'http://localhost:8080',
+    }),
+    createdAt: 0,
+    updatedAt: 0,
+    isBuiltIn: true,
+  },
+  {
+    id: 'axidraw-mini',
+    name: 'AxiDraw Mini',
+    settings: VectorSettingsSchema.parse({
+      canvasWidth: 152,
+      canvasHeight: 101,
+      targetWidth: 150,
+      targetHeight: 100,
+      feedRate: 2500,
+      safeZ: 3,
+      backlashX: 0,
+      backlashY: 0,
+      controllerHost: 'http://localhost:8080',
+    }),
+    createdAt: 0,
+    updatedAt: 0,
+    isBuiltIn: true,
+  },
+  {
+    id: 'eleksdraw',
+    name: 'EleksDraw',
+    settings: VectorSettingsSchema.parse({
+      canvasWidth: 180,
+      canvasHeight: 180,
+      targetWidth: 170,
+      targetHeight: 170,
+      feedRate: 2000,
+      safeZ: 5,
+      backlashX: 0.2,
+      backlashY: 0.2,
+    }),
+    createdAt: 0,
+    updatedAt: 0,
+    isBuiltIn: true,
+  },
+  {
+    id: 'large-plotter',
+    name: 'Large Format Plotter',
+    settings: VectorSettingsSchema.parse({
+      canvasWidth: 500,
+      canvasHeight: 400,
+      targetWidth: 500,
+      targetHeight: 400,
+      feedRate: 4000,
+      safeZ: 10,
+      dipInterval: 150,
+      dipX: 50,
+      dipY: 10,
+    }),
+    createdAt: 0,
+    updatedAt: 0,
+    isBuiltIn: true,
+  },
+  {
+    id: 'pen-plotter-small',
+    name: 'Small Pen Plotter (A5)',
+    settings: VectorSettingsSchema.parse({
+      canvasWidth: 148,
+      canvasHeight: 105,
+      targetWidth: 140,
+      targetHeight: 100,
+      feedRate: 1800,
+      safeZ: 5,
+      dipInterval: 60,
+    }),
+    createdAt: 0,
+    updatedAt: 0,
+    isBuiltIn: true,
+  },
+];
+
+// LocalStorage helpers
+function loadFromStorage<T>(key: string, fallback: T): T {
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.warn(`Failed to load ${key} from localStorage:`, e);
+  }
+  return fallback;
+}
+
+function saveToStorage<T>(key: string, value: T): void {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn(`Failed to save ${key} to localStorage:`, e);
+  }
+}
+
 // Validation result type
 export interface ValidationResult<T> {
   success: boolean;
@@ -172,8 +307,39 @@ export function getFieldConstraints(key: keyof VectorSettings): { min?: number; 
 }
 
 export function useVectorSettings() {
-  const [settings, setSettings] = useState<VectorSettings>(DEFAULT_SETTINGS);
+  // Load initial settings from localStorage (with validation)
+  const [settings, setSettings] = useState<VectorSettings>(() => {
+    const stored = loadFromStorage<Partial<VectorSettings>>(STORAGE_KEY, {});
+    const result = validateSettings({ ...DEFAULT_SETTINGS, ...stored });
+    return result.success && result.data ? result.data : DEFAULT_SETTINGS;
+  });
+  
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  
+  // Load custom profiles from localStorage
+  const [customProfiles, setCustomProfiles] = useState<MachineProfile[]>(() =>
+    loadFromStorage(PROFILES_KEY, [])
+  );
+  
+  // Track active profile ID (null means custom/modified)
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(() =>
+    loadFromStorage(ACTIVE_PROFILE_KEY, 'default')
+  );
+
+  // Autosave settings to localStorage whenever they change
+  useEffect(() => {
+    saveToStorage(STORAGE_KEY, settings);
+  }, [settings]);
+
+  // Save custom profiles to localStorage
+  useEffect(() => {
+    saveToStorage(PROFILES_KEY, customProfiles);
+  }, [customProfiles]);
+
+  // Save active profile ID to localStorage
+  useEffect(() => {
+    saveToStorage(ACTIVE_PROFILE_KEY, activeProfileId);
+  }, [activeProfileId]);
 
   // Memoized update function with validation
   const updateSetting = useCallback(<K extends keyof VectorSettings>(key: K, value: VectorSettings[K]) => {
@@ -185,6 +351,8 @@ export function useVectorSettings() {
         const { [key]: _, ...rest } = prev;
         return rest;
       });
+      // Mark as modified when settings change
+      setActiveProfileId(null);
     } else if (result.errors) {
       const errorMessage = result.errors.issues[0]?.message || 'Invalid value';
       setValidationErrors(prev => ({ ...prev, [key]: errorMessage }));
@@ -194,11 +362,13 @@ export function useVectorSettings() {
   // Update without validation (for trusted sources)
   const updateSettingUnsafe = useCallback(<K extends keyof VectorSettings>(key: K, value: VectorSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+    setActiveProfileId(null);
   }, []);
 
   const resetSettings = useCallback(() => {
     setSettings(DEFAULT_SETTINGS);
     setValidationErrors({});
+    setActiveProfileId('default');
   }, []);
 
   // Load settings from a partial object (merges with defaults and validates)
@@ -222,6 +392,74 @@ export function useVectorSettings() {
     }
   }, []);
 
+  // Get all profiles (built-in + custom)
+  const allProfiles = useMemo(() => [
+    ...BUILT_IN_PROFILES,
+    ...customProfiles.map(p => ({ ...p, isBuiltIn: false })),
+  ], [customProfiles]);
+
+  // Load a profile
+  const loadProfile = useCallback((profileId: string) => {
+    const profile = [...BUILT_IN_PROFILES, ...customProfiles].find(p => p.id === profileId);
+    if (profile) {
+      const result = validateSettings(profile.settings);
+      if (result.success && result.data) {
+        setSettings(result.data);
+        setValidationErrors({});
+        setActiveProfileId(profileId);
+      }
+    }
+  }, [customProfiles]);
+
+  // Save current settings as a new profile
+  const saveAsProfile = useCallback((name: string) => {
+    const id = `custom-${Date.now()}`;
+    const now = Date.now();
+    const newProfile: MachineProfile = {
+      id,
+      name,
+      settings: { ...settings },
+      createdAt: now,
+      updatedAt: now,
+      isBuiltIn: false,
+    };
+    setCustomProfiles(prev => [...prev, newProfile]);
+    setActiveProfileId(id);
+    return id;
+  }, [settings]);
+
+  // Update an existing custom profile
+  const updateProfile = useCallback((profileId: string) => {
+    setCustomProfiles(prev =>
+      prev.map(p =>
+        p.id === profileId
+          ? { ...p, settings: { ...settings }, updatedAt: Date.now() }
+          : p
+      )
+    );
+    setActiveProfileId(profileId);
+  }, [settings]);
+
+  // Delete a custom profile
+  const deleteProfile = useCallback((profileId: string) => {
+    setCustomProfiles(prev => prev.filter(p => p.id !== profileId));
+    if (activeProfileId === profileId) {
+      setActiveProfileId('default');
+      setSettings(DEFAULT_SETTINGS);
+    }
+  }, [activeProfileId]);
+
+  // Rename a custom profile
+  const renameProfile = useCallback((profileId: string, newName: string) => {
+    setCustomProfiles(prev =>
+      prev.map(p =>
+        p.id === profileId
+          ? { ...p, name: newName, updatedAt: Date.now() }
+          : p
+      )
+    );
+  }, []);
+
   // Memoized derived values for performance
   const scale = useMemo(() => ({
     x: settings.targetWidth / settings.canvasWidth,
@@ -240,5 +478,13 @@ export function useVectorSettings() {
     isValid,
     scale,
     DEFAULT_SETTINGS,
+    // Profile management
+    profiles: allProfiles,
+    activeProfileId,
+    loadProfile,
+    saveAsProfile,
+    updateProfile,
+    deleteProfile,
+    renameProfile,
   };
 }

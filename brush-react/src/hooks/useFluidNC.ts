@@ -4,6 +4,8 @@ import {
   type MachineState,
   type StreamingState,
   type MachinePosition,
+  type PositionData,
+  type PositionType,
   type FluidNCStatus,
   type StreamingProgress,
   INITIAL_STATUS,
@@ -13,7 +15,7 @@ import {
 } from '../schemas/fluidNCSchemas';
 
 // Re-export types for consumers
-export type { ConnectionState, MachineState, StreamingState, MachinePosition, FluidNCStatus, StreamingProgress };
+export type { ConnectionState, MachineState, StreamingState, MachinePosition, PositionData, PositionType, FluidNCStatus, StreamingProgress };
 
 export interface UseFluidNCOptions {
   autoConnect?: boolean;
@@ -50,7 +52,7 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
   const maxPendingOks = 1; // Conservative: wait for ok before sending next (safer for FluidNC)
 
   // Track last position for throttling updates
-  const lastPositionRef = useRef<MachinePosition>({ x: 0, y: 0, z: 0 });
+  const lastPositionRef = useRef<PositionData>({ coords: { x: 0, y: 0, z: 0 }, type: 'WPos' });
 
   // Parse FluidNC status message using Zod-validated parser
   const parseStatusMessage = useCallback((data: string) => {
@@ -103,6 +105,9 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
 
       ws.onopen = () => {
         setStatus(prev => ({ ...prev, connectionState: 'connected', lastError: null }));
+
+        // Configure status report to use Work Position (WPos) instead of Machine Position (MPos)
+        ws.send('$10=0\n');
 
         // Enable auto-reporting if configured
         if (autoReport) {

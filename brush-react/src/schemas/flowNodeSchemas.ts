@@ -294,6 +294,19 @@ export const WireframeNodeDataSchema = BaseNodeDataSchema.extend({
   edgeAngleThreshold: z.number().min(0).max(180),
 });
 
+// ============ Clipper Node ============
+
+export const ClipperNodeDataSchema = BaseNodeDataSchema.extend({
+  operation: z.enum(['union', 'intersection', 'difference', 'xor', 'offset', 'simplify', 'delaunay', 'delaunay-edges']),
+  // Offset settings
+  offsetDistance: z.number(),
+  joinType: z.enum(['round', 'square', 'miter']),
+  // Simplify settings
+  simplifyTolerance: z.number().min(0.001).max(10),
+  // Delaunay settings
+  sampleDistance: z.number().min(0),
+});
+
 // ============ Supershape Node ============
 
 export const SupershapeNodeDataSchema = BaseNodeDataSchema.extend({
@@ -355,6 +368,7 @@ export const nodeSchemaMap = {
   objloader: ObjLoaderNodeDataSchema,
   wireframe: WireframeNodeDataSchema,
   supershape: SupershapeNodeDataSchema,
+  clipper: ClipperNodeDataSchema,
   output: OutputNodeDataSchema,
 } as const;
 
@@ -389,6 +403,7 @@ export type SlicerNodeData = z.infer<typeof SlicerNodeDataSchema>;
 export type ObjLoaderNodeData = z.infer<typeof ObjLoaderNodeDataSchema>;
 export type WireframeNodeData = z.infer<typeof WireframeNodeDataSchema>;
 export type SupershapeNodeData = z.infer<typeof SupershapeNodeDataSchema>;
+export type ClipperNodeData = z.infer<typeof ClipperNodeDataSchema>;
 export type OutputNodeData = z.infer<typeof OutputNodeDataSchema>;
 
 // Union type
@@ -421,6 +436,7 @@ export type FlowNodeData =
   | ObjLoaderNodeData
   | WireframeNodeData
   | SupershapeNodeData
+  | ClipperNodeData
   | OutputNodeData;
 
 // ============ Validation Helpers ============

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import type { VectorSettings } from '../hooks/useVectorSettings';
+import type { VectorSettings, MachineProfile } from '../hooks/useVectorSettings';
 import { getColorWells } from '../hooks/useVectorSettings';
 import { DipSequenceModal } from './DipSequenceModal';
 
@@ -11,9 +11,17 @@ interface VectorSettingsPanelProps {
   onSetColorWellPosition?: (colorIndex: 1 | 2 | 3 | 4) => void;
   onJogToPosition?: (x: number, y: number) => void;
   isConnected?: boolean;
+  // Profile management
+  profiles?: MachineProfile[];
+  activeProfileId?: string | null;
+  onLoadProfile?: (id: string) => void;
+  onSaveAsProfile?: (name: string) => string;
+  onUpdateProfile?: (id: string) => void;
+  onDeleteProfile?: (id: string) => void;
+  onRenameProfile?: (id: string, name: string) => void;
 }
 
-type SectionId = 'canvas' | 'output' | 'machine' | 'optimize' | 'ink' | 'palette' | 'hardware';
+type SectionId = 'profiles' | 'canvas' | 'output' | 'machine' | 'optimize' | 'ink' | 'palette' | 'hardware';
 
 // Text input with local state to prevent focus loss during typing
 function TextInput({
@@ -134,12 +142,14 @@ function CollapsibleSection({
   expandedSection,
   onToggle,
   children,
+  badge,
 }: {
   id: SectionId;
   title: string;
   expandedSection: SectionId | null;
   onToggle: (id: SectionId) => void;
   children: React.ReactNode;
+  badge?: React.ReactNode;
 }) {
   return (
     <div className="border-b border-slate-700 last:border-b-0">
@@ -147,7 +157,10 @@ function CollapsibleSection({
         onClick={() => onToggle(id)}
         className="w-full px-3 py-2 flex items-center justify-between text-sm text-slate-300 hover:bg-slate-700/50"
       >
-        {title}
+        <span className="flex items-center gap-2">
+          {title}
+          {badge}
+        </span>
         <svg
           className={`w-4 h-4 transition-transform ${expandedSection === id ? 'rotate-180' : ''}`}
           fill="none"
@@ -162,11 +175,257 @@ function CollapsibleSection({
   );
 }
 
-export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSetColorWellPosition, onJogToPosition, isConnected }: VectorSettingsPanelProps) {
+// Profile selector component
+function ProfileSelector({
+  profiles,
+  activeProfileId,
+  onLoadProfile,
+  onSaveAsProfile,
+  onUpdateProfile,
+  onDeleteProfile,
+  onRenameProfile,
+}: {
+  profiles: MachineProfile[];
+  activeProfileId: string | null;
+  onLoadProfile: (id: string) => void;
+  onSaveAsProfile: (name: string) => string;
+  onUpdateProfile: (id: string) => void;
+  onDeleteProfile: (id: string) => void;
+  onRenameProfile: (id: string, name: string) => void;
+}) {
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+
+  const activeProfile = profiles.find(p => p.id === activeProfileId);
+  const isModified = activeProfileId === null;
+  const canUpdate = activeProfile && !activeProfile.isBuiltIn && !isModified;
+
+  const builtInProfiles = profiles.filter(p => p.isBuiltIn);
+  const customProfiles = profiles.filter(p => !p.isBuiltIn);
+
+  const handleSave = () => {
+    if (newProfileName.trim()) {
+      onSaveAsProfile(newProfileName.trim());
+      setNewProfileName('');
+      setShowSaveModal(false);
+    }
+  };
+
+  const handleRename = (id: string) => {
+    if (editingName.trim()) {
+      onRenameProfile(id, editingName.trim());
+      setEditingId(null);
+      setEditingName('');
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Profile Dropdown */}
+      <div>
+        <div className="flex gap-2">
+          <select
+            value={activeProfileId || ''}
+            onChange={e => onLoadProfile(e.target.value)}
+            className="flex-1 px-2 py-1.5 text-xs bg-slate-800 border border-slate-600 rounded text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {isModified && (
+              <option value="" disabled>
+                (Modified)
+              </option>
+            )}
+            <optgroup label="Built-in Presets">
+              {builtInProfiles.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </optgroup>
+            {customProfiles.length > 0 && (
+              <optgroup label="Custom Profiles">
+                {customProfiles.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+          </select>
+        </div>
+      </div>
+
+      {/* Status indicator */}
+      {isModified && (
+        <div className="flex items-center gap-1.5 text-[10px] text-amber-400 bg-amber-500/10 px-2 py-1.5 rounded">
+          <svg className="w-3 h-3 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span>Settings modified - save as profile to keep</span>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-1.5 flex-wrap">
+        <button
+          onClick={() => setShowSaveModal(true)}
+          className="px-2 py-1 text-[10px] bg-blue-600 hover:bg-blue-500 text-white rounded
+                     transition-colors flex items-center gap-1"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Save As
+        </button>
+
+        {canUpdate && (
+          <button
+            onClick={() => onUpdateProfile(activeProfileId!)}
+            className="px-2 py-1 text-[10px] bg-slate-600 hover:bg-slate-500 text-white rounded
+                       transition-colors"
+          >
+            Update
+          </button>
+        )}
+
+        {activeProfile && !activeProfile.isBuiltIn && (
+          <>
+            <button
+              onClick={() => {
+                setEditingId(activeProfileId);
+                setEditingName(activeProfile.name);
+              }}
+              className="px-2 py-1 text-[10px] bg-slate-700 hover:bg-slate-600 text-white rounded
+                         transition-colors"
+            >
+              Rename
+            </button>
+            <button
+              onClick={() => {
+                if (confirm(`Delete profile "${activeProfile.name}"?`)) {
+                  onDeleteProfile(activeProfileId!);
+                }
+              }}
+              className="px-2 py-1 text-[10px] bg-red-600/70 hover:bg-red-500 text-white rounded
+                         transition-colors"
+            >
+              Delete
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Rename Modal */}
+      {editingId && (
+        <div className="p-2 bg-slate-900/50 border border-slate-600 rounded space-y-2">
+          <label className="block text-[10px] text-slate-400">Rename Profile</label>
+          <input
+            type="text"
+            value={editingName}
+            onChange={e => setEditingName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleRename(editingId)}
+            className="w-full px-2 py-1 text-xs bg-slate-800 border border-slate-600 rounded
+                       text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            autoFocus
+          />
+          <div className="flex gap-1.5 justify-end">
+            <button
+              onClick={() => setEditingId(null)}
+              className="px-2 py-1 text-[10px] bg-slate-700 hover:bg-slate-600 text-white rounded"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleRename(editingId)}
+              className="px-2 py-1 text-[10px] bg-blue-600 hover:bg-blue-500 text-white rounded"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Save Modal */}
+      {showSaveModal && (
+        <div className="p-2 bg-slate-900/50 border border-slate-600 rounded space-y-2">
+          <label className="block text-[10px] text-slate-400">New Profile Name</label>
+          <input
+            type="text"
+            value={newProfileName}
+            onChange={e => setNewProfileName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSave()}
+            placeholder="My Custom Machine"
+            className="w-full px-2 py-1 text-xs bg-slate-800 border border-slate-600 rounded
+                       text-white focus:outline-none focus:ring-1 focus:ring-blue-500"
+            autoFocus
+          />
+          <div className="flex gap-1.5 justify-end">
+            <button
+              onClick={() => setShowSaveModal(false)}
+              className="px-2 py-1 text-[10px] bg-slate-700 hover:bg-slate-600 text-white rounded"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!newProfileName.trim()}
+              className="px-2 py-1 text-[10px] bg-blue-600 hover:bg-blue-500 text-white rounded
+                         disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-save indicator */}
+      <div className="flex items-center gap-1 text-[10px] text-slate-500">
+        <svg className="w-2.5 h-2.5 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+          <path
+            fillRule="evenodd"
+            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+            clipRule="evenodd"
+          />
+        </svg>
+        <span>Auto-saved to browser</span>
+      </div>
+    </div>
+  );
+}
+
+export function VectorSettingsPanel({
+  settings,
+  onUpdate,
+  onReset,
+  onLoad,
+  onSetColorWellPosition,
+  onJogToPosition,
+  isConnected,
+  profiles,
+  activeProfileId,
+  onLoadProfile,
+  onSaveAsProfile,
+  onUpdateProfile,
+  onDeleteProfile,
+  onRenameProfile,
+}: VectorSettingsPanelProps) {
   const colorWells = getColorWells(settings);
-  const [expandedSection, setExpandedSection] = useState<SectionId | null>('canvas');
+  const [expandedSection, setExpandedSection] = useState<SectionId | null>('profiles');
   const [isDipModalOpen, setIsDipModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  const hasProfileSupport =
+    profiles &&
+    onLoadProfile &&
+    onSaveAsProfile &&
+    onUpdateProfile &&
+    onDeleteProfile &&
+    onRenameProfile;
 
   const handleSave = () => {
     const blob = new Blob([JSON.stringify(settings, null, 2)], { type: 'application/json' });
@@ -236,6 +495,37 @@ export function VectorSettingsPanel({ settings, onUpdate, onReset, onLoad, onSet
           </button>
         </div>
       </div>
+
+      {/* Machine Profiles Section */}
+      {hasProfileSupport && (
+        <CollapsibleSection
+          id="profiles"
+          title="Machine Profile"
+          expandedSection={expandedSection}
+          onToggle={toggle}
+          badge={
+            activeProfileId === null ? (
+              <span className="px-1.5 py-0.5 text-[9px] bg-amber-500/20 text-amber-400 rounded">
+                Modified
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-500">
+                {profiles.find(p => p.id === activeProfileId)?.name}
+              </span>
+            )
+          }
+        >
+          <ProfileSelector
+            profiles={profiles}
+            activeProfileId={activeProfileId ?? null}
+            onLoadProfile={onLoadProfile}
+            onSaveAsProfile={onSaveAsProfile}
+            onUpdateProfile={onUpdateProfile}
+            onDeleteProfile={onDeleteProfile}
+            onRenameProfile={onRenameProfile}
+          />
+        </CollapsibleSection>
+      )}
 
       <CollapsibleSection id="canvas" title="Canvas" expandedSection={expandedSection} onToggle={toggle}>
         <NumberInput

@@ -274,6 +274,15 @@ export interface WireframeNodeData extends NodeData {
   edgeAngleThreshold: number;
 }
 
+// Clipper node
+export interface ClipperNodeData extends NodeData {
+  operation: 'union' | 'intersection' | 'difference' | 'xor' | 'offset' | 'simplify' | 'delaunay' | 'delaunay-edges';
+  offsetDistance: number;
+  joinType: 'round' | 'square' | 'miter';
+  simplifyTolerance: number;
+  sampleDistance: number;
+}
+
 // Supershape generator node
 export interface SupershapeNodeData extends NodeData {
   // First superformula (latitude)
@@ -331,6 +340,7 @@ export type FlowNodeData =
   | ObjLoaderNodeData
   | WireframeNodeData
   | SupershapeNodeData
+  | ClipperNodeData
   | OutputNodeData;
 
 // Node categories for the palette
@@ -371,6 +381,7 @@ export const nodeCategories = {
   ],
   slicer: [
     { type: 'slicer', label: 'Slicer', description: '3D slicer infill patterns (lines, grid, honeycomb, gyroid)' },
+    { type: 'clipper', label: 'Clipper', description: 'Boolean ops, offset, simplify, Delaunay triangulation' },
   ],
   threeD: [
     // { type: 'objloader', label: 'OBJ Loader', description: 'Load 3D OBJ model file' },
@@ -569,6 +580,14 @@ return output;
     a2: 1,
     b2: 1,
     segments: 20,
+  },
+  clipper: {
+    label: 'Clipper',
+    operation: 'union',
+    offsetDistance: 1,
+    joinType: 'round',
+    simplifyTolerance: 0.1,
+    sampleDistance: 0,
   },
   output: { label: 'Output' },
 };

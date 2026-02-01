@@ -1,10 +1,22 @@
 import { useState } from 'react';
-import type { Settings } from '../types';
+import type { Settings, MachineProfile } from '../types';
+
+interface ProfileWithBuiltIn extends MachineProfile {
+  isBuiltIn: boolean;
+}
 
 interface SettingsPanelProps {
   settings: Settings;
   onUpdate: <K extends keyof Settings>(key: K, value: Settings[K]) => void;
   onReset: () => void;
+  // Profile management
+  profiles?: ProfileWithBuiltIn[];
+  activeProfileId?: string | null;
+  onLoadProfile?: (id: string) => void;
+  onSaveAsProfile?: (name: string) => string;
+  onUpdateProfile?: (id: string) => void;
+  onDeleteProfile?: (id: string) => void;
+  onRenameProfile?: (id: string, name: string) => void;
 }
 
 interface NumberInputProps {
@@ -68,7 +80,253 @@ function Section({ title, children, defaultOpen = false }: SectionProps) {
   );
 }
 
-export function SettingsPanel({ settings, onUpdate, onReset }: SettingsPanelProps) {
+interface ProfileSelectorProps {
+  profiles: ProfileWithBuiltIn[];
+  activeProfileId: string | null;
+  onLoadProfile: (id: string) => void;
+  onSaveAsProfile: (name: string) => string;
+  onUpdateProfile: (id: string) => void;
+  onDeleteProfile: (id: string) => void;
+  onRenameProfile: (id: string, name: string) => void;
+}
+
+function ProfileSelector({
+  profiles,
+  activeProfileId,
+  onLoadProfile,
+  onSaveAsProfile,
+  onUpdateProfile,
+  onDeleteProfile,
+  onRenameProfile,
+}: ProfileSelectorProps) {
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState('');
+
+  const activeProfile = profiles.find(p => p.id === activeProfileId);
+  const isModified = activeProfileId === null;
+  const canUpdate = activeProfile && !activeProfile.isBuiltIn && !isModified;
+
+  const handleSave = () => {
+    if (newProfileName.trim()) {
+      onSaveAsProfile(newProfileName.trim());
+      setNewProfileName('');
+      setShowSaveModal(false);
+    }
+  };
+
+  const handleRename = (id: string) => {
+    if (editingName.trim()) {
+      onRenameProfile(id, editingName.trim());
+      setEditingId(null);
+      setEditingName('');
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Profile Dropdown */}
+      <div>
+        <label className="block text-xs text-slate-400 mb-1">Machine Profile</label>
+        <div className="flex gap-2">
+          <select
+            value={activeProfileId || ''}
+            onChange={e => onLoadProfile(e.target.value)}
+            className="flex-1 px-3 py-2 bg-slate-800 border border-slate-600 rounded-md
+                       text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            {isModified && (
+              <option value="" disabled>
+                (Modified)
+              </option>
+            )}
+            <optgroup label="Built-in Presets">
+              {profiles
+                .filter(p => p.isBuiltIn)
+                .map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </optgroup>
+            {profiles.filter(p => !p.isBuiltIn).length > 0 && (
+              <optgroup label="Custom Profiles">
+                {profiles
+                  .filter(p => !p.isBuiltIn)
+                  .map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+          </select>
+        </div>
+      </div>
+
+      {/* Status indicator */}
+      {isModified && (
+        <div className="flex items-center gap-2 text-xs text-amber-400">
+          <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fillRule="evenodd"
+              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+              clipRule="evenodd"
+            />
+          </svg>
+          <span>Settings modified - save as new profile to keep changes</span>
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="flex gap-2 flex-wrap">
+        <button
+          onClick={() => setShowSaveModal(true)}
+          className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-md
+                     transition-colors flex items-center gap-1"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+          </svg>
+          Save As New
+        </button>
+
+        {canUpdate && (
+          <button
+            onClick={() => onUpdateProfile(activeProfileId!)}
+            className="px-3 py-1.5 text-xs bg-slate-600 hover:bg-slate-500 text-white rounded-md
+                       transition-colors"
+          >
+            Update Profile
+          </button>
+        )}
+
+        {activeProfile && !activeProfile.isBuiltIn && (
+          <>
+            <button
+              onClick={() => {
+                setEditingId(activeProfileId);
+                setEditingName(activeProfile.name);
+              }}
+              className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-md
+                         transition-colors"
+            >
+              Rename
+            </button>
+            <button
+              onClick={() => {
+                if (confirm(`Delete profile "${activeProfile.name}"?`)) {
+                  onDeleteProfile(activeProfileId!);
+                }
+              }}
+              className="px-3 py-1.5 text-xs bg-red-600/80 hover:bg-red-500 text-white rounded-md
+                         transition-colors"
+            >
+              Delete
+            </button>
+          </>
+        )}
+      </div>
+
+      {/* Rename Modal */}
+      {editingId && (
+        <div className="p-3 bg-slate-800 border border-slate-600 rounded-lg space-y-2">
+          <label className="block text-xs text-slate-400">Rename Profile</label>
+          <input
+            type="text"
+            value={editingName}
+            onChange={e => setEditingName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleRename(editingId)}
+            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md
+                       text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+            autoFocus
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setEditingId(null)}
+              className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-md"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleRename(editingId)}
+              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-md"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Save Modal */}
+      {showSaveModal && (
+        <div className="p-3 bg-slate-800 border border-slate-600 rounded-lg space-y-2">
+          <label className="block text-xs text-slate-400">New Profile Name</label>
+          <input
+            type="text"
+            value={newProfileName}
+            onChange={e => setNewProfileName(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleSave()}
+            placeholder="My Custom Machine"
+            className="w-full px-3 py-2 bg-slate-900 border border-slate-600 rounded-md
+                       text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500"
+            autoFocus
+          />
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setShowSaveModal(false)}
+              className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded-md"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={!newProfileName.trim()}
+              className="px-3 py-1.5 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded-md
+                         disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Save Profile
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-save indicator */}
+      <div className="flex items-center gap-1.5 text-xs text-slate-500">
+        <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+          <path
+            fillRule="evenodd"
+            d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+            clipRule="evenodd"
+          />
+        </svg>
+        <span>Settings auto-saved to browser</span>
+      </div>
+    </div>
+  );
+}
+
+export function SettingsPanel({
+  settings,
+  onUpdate,
+  onReset,
+  profiles,
+  activeProfileId,
+  onLoadProfile,
+  onSaveAsProfile,
+  onUpdateProfile,
+  onDeleteProfile,
+  onRenameProfile,
+}: SettingsPanelProps) {
+  const hasProfileSupport =
+    profiles &&
+    onLoadProfile &&
+    onSaveAsProfile &&
+    onUpdateProfile &&
+    onDeleteProfile &&
+    onRenameProfile;
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -80,6 +338,21 @@ export function SettingsPanel({ settings, onUpdate, onReset }: SettingsPanelProp
           Reset to Defaults
         </button>
       </div>
+
+      {/* Machine Profile Selector */}
+      {hasProfileSupport && (
+        <Section title="Machine Profiles" defaultOpen>
+          <ProfileSelector
+            profiles={profiles}
+            activeProfileId={activeProfileId ?? null}
+            onLoadProfile={onLoadProfile}
+            onSaveAsProfile={onSaveAsProfile}
+            onUpdateProfile={onUpdateProfile}
+            onDeleteProfile={onDeleteProfile}
+            onRenameProfile={onRenameProfile}
+          />
+        </Section>
+      )}
 
       <Section title="Layout" defaultOpen>
         <div className="grid grid-cols-2 gap-3">

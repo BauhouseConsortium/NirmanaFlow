@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { MachinePosition, MachineState } from '../hooks/useFluidNC';
+import type { PositionData, MachineState } from '../hooks/useFluidNC';
 
 interface JogControlModalProps {
   isOpen: boolean;
   onClose: () => void;
   isConnected: boolean;
   machineState: MachineState;
-  position: MachinePosition;
+  position: PositionData;
   onJog: (axis: 'X' | 'Y' | 'Z', distance: number, feedRate?: number) => void;
   onHome: () => void;
   onUnlock: () => void;
@@ -180,18 +180,23 @@ export function JogControlModal({
           </div>
 
           {/* Position Display */}
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="bg-slate-900 rounded-lg p-3">
-              <div className="text-xs text-slate-500 mb-1">X</div>
-              <div className="font-mono text-lg text-blue-400">{position.x.toFixed(2)}</div>
+          <div className="space-y-1">
+            <div className="text-xs text-slate-500 text-center">
+              {position.type === 'MPos' ? 'Machine Position' : 'Work Position'}
             </div>
-            <div className="bg-slate-900 rounded-lg p-3">
-              <div className="text-xs text-slate-500 mb-1">Y</div>
-              <div className="font-mono text-lg text-green-400">{position.y.toFixed(2)}</div>
-            </div>
-            <div className="bg-slate-900 rounded-lg p-3">
-              <div className="text-xs text-slate-500 mb-1">Z</div>
-              <div className="font-mono text-lg text-red-400">{position.z.toFixed(2)}</div>
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-slate-900 rounded-lg p-3">
+                <div className="text-xs text-slate-500 mb-1">X</div>
+                <div className="font-mono text-lg text-blue-400">{position.coords.x.toFixed(2)}</div>
+              </div>
+              <div className="bg-slate-900 rounded-lg p-3">
+                <div className="text-xs text-slate-500 mb-1">Y</div>
+                <div className="font-mono text-lg text-green-400">{position.coords.y.toFixed(2)}</div>
+              </div>
+              <div className="bg-slate-900 rounded-lg p-3">
+                <div className="text-xs text-slate-500 mb-1">Z</div>
+                <div className="font-mono text-lg text-red-400">{position.coords.z.toFixed(2)}</div>
+              </div>
             </div>
           </div>
 
@@ -228,7 +233,7 @@ export function JogControlModal({
             <div className="flex flex-col gap-1">
               <JogButton axis="Z" direction={1} label="Z+" className="bg-slate-600" />
               <button
-                onClick={() => onJog('Z', -position.z, feedRate)}
+                onClick={() => onJog('Z', -position.coords.z, feedRate)}
                 disabled={!canJog}
                 className={`
                   w-14 h-14 flex items-center justify-center rounded-lg
