@@ -266,6 +266,7 @@ function VectorPreviewComponent({
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [showWorkArea, setShowWorkArea] = useState(true);
   const [showInkDips, setShowInkDips] = useState(true);
+  const [showBacklash, setShowBacklash] = useState(true);
   const [panMode, setPanMode] = useState(false);
   const isPanningRef = useRef(false);
   const lastPanPosRef = useRef({ x: 0, y: 0 });
@@ -373,15 +374,17 @@ function VectorPreviewComponent({
     ctx.fillRect(0, 0, cw, ch);
 
     // Decide whether to render from G-code or canvas paths
-    const useGCode = parsedGCode.paths.length > 0;
+    // When showBacklash is false, show original paths even if G-code exists
+    const hasGCode = parsedGCode.paths.length > 0;
+    const useGCode = hasGCode && showBacklash;
     const { bounds } = parsedGCode;
 
     // Calculate viewport based on coordinate space being used
     const padding = 10;
     let viewMinX: number, viewMinY: number, viewMaxX: number, viewMaxY: number;
 
-    if (useGCode && outputSettings) {
-      // G-code paths exist: show machine coordinate space (origin to work area bounds)
+    if (hasGCode && outputSettings) {
+      // G-code exists (regardless of showBacklash): show machine coordinate space
       const margin = 5;
       const workAreaMaxX = outputSettings.offsetX + outputSettings.targetWidth;
       const workAreaMaxY = outputSettings.offsetY + outputSettings.targetHeight;
@@ -390,7 +393,7 @@ function VectorPreviewComponent({
       viewMinY = -margin;
       viewMaxX = workAreaMaxX + margin;
       viewMaxY = workAreaMaxY + margin;
-    } else if (useGCode) {
+    } else if (hasGCode) {
       // G-code paths but no outputSettings: use G-code bounds
       const margin = 5;
       viewMinX = bounds.minX - margin;
@@ -457,7 +460,7 @@ function VectorPreviewComponent({
     }
 
     // Draw work area border (only when showing G-code in machine coordinates)
-    if (outputSettings && useGCode) {
+    if (outputSettings && hasGCode) {
       const { targetWidth, targetHeight, offsetX, offsetY } = outputSettings;
       const [waX1, waY1] = toScreen(offsetX, offsetY);
       const [waX2, waY2] = toScreen(offsetX + targetWidth, offsetY + targetHeight);
@@ -486,6 +489,15 @@ function VectorPreviewComponent({
         ctx.rect(waX1, waY1, waX2 - waX1, waY2 - waY1);
         ctx.clip();
       }
+    } else if (hasGCode && !outputSettings && clipToWorkArea) {
+      // Clip to bounds when no outputSettings but clipping is enabled
+      const { bounds: b } = parsedGCode;
+      const [bx1, by1] = toScreen(b.minX, b.minY);
+      const [bx2, by2] = toScreen(b.maxX, b.maxY);
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(bx1, by1, bx2 - bx1, by2 - by1);
+      ctx.clip();
     }
 
     // Draw paths
@@ -508,8 +520,59 @@ function VectorPreviewComponent({
         }
         ctx.stroke();
       }
+    } else if (hasGCode && outputSettings && !showBacklash) {
+      // Render original paths transformed to output coordinates (without backlash)
+      // This matches the transform in vectorGcodeGenerator.ts
+      const canvasW = width;
+      const canvasH = height;
+      const { targetWidth, targetHeight, offsetX: outOffsetX, offsetY: outOffsetY } = outputSettings;
+      
+      // Calculate scale and centering (same as vectorGcodeGenerator)
+      const scaleX = targetWidth / canvasW;
+      const scaleY = targetHeight / canvasH;
+      const pathScale = Math.min(scaleX, scaleY);
+      const scaledWidth = canvasW * pathScale;
+      const scaledHeight = canvasH * pathScale;
+      const centerOffsetX = (targetWidth - scaledWidth) / 2;
+      const centerOffsetY = (targetHeight - scaledHeight) / 2;
+      
+      // Transform canvas coords to output coords
+      const transformToOutput = (px: number, py: number): [number, number] => {
+        const x = px * pathScale + outOffsetX + centerOffsetX;
+        const y = py * pathScale + outOffsetY + centerOffsetY;
+        return [x, y];
+      };
+
+      for (const coloredPath of paths) {
+        if (coloredPath.points.length < 2) continue;
+
+        // Determine stroke color based on path's color property
+        let strokeColor = '#1e40af'; // Default blue
+        if (coloredPath.color && colorWells.length > 0) {
+          const well = colorWells.find(w => w.id === coloredPath.color);
+          if (well) {
+            strokeColor = well.color;
+          } else {
+            strokeColor = COLOR_WELL_DEFAULTS[coloredPath.color - 1] || '#1e40af';
+          }
+        } else if (coloredPath.color) {
+          strokeColor = COLOR_WELL_DEFAULTS[coloredPath.color - 1] || '#1e40af';
+        }
+
+        ctx.strokeStyle = strokeColor;
+        ctx.beginPath();
+        const [ox, oy] = transformToOutput(coloredPath.points[0][0], coloredPath.points[0][1]);
+        const [sx, sy] = toScreen(ox, oy);
+        ctx.moveTo(sx, sy);
+        for (let i = 1; i < coloredPath.points.length; i++) {
+          const [oxi, oyi] = transformToOutput(coloredPath.points[i][0], coloredPath.points[i][1]);
+          const [px, py] = toScreen(oxi, oyi);
+          ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+      }
     } else {
-      // Render from canvas paths (with colors when available)
+      // Render from canvas paths directly (no G-code generated yet)
       for (const coloredPath of paths) {
         if (coloredPath.points.length < 2) continue;
 
@@ -542,7 +605,7 @@ function VectorPreviewComponent({
     }
 
     // Restore canvas state if clipping was applied
-    if (outputSettings && useGCode && clipToWorkArea) {
+    if (outputSettings && hasGCode && clipToWorkArea) {
       ctx.restore();
     }
 
@@ -789,7 +852,7 @@ function VectorPreviewComponent({
       ctx.textAlign = 'left';
       ctx.fillText(statsText, 8, ch - 10);
     }
-  }, [paths, dimensions, width, height, isConnected, machinePosition, parsedGCode, colorWells, placementMode, clickedPosition, hoverPosition, outputSettings, clipToWorkArea, zoomLevel, panOffset, showWorkArea, showInkDips]);
+  }, [paths, dimensions, width, height, isConnected, machinePosition, parsedGCode, colorWells, placementMode, clickedPosition, hoverPosition, outputSettings, clipToWorkArea, zoomLevel, panOffset, showWorkArea, showInkDips, showBacklash]);
 
   // Store drawCanvas in a ref to avoid dependency loops
   const drawCanvasRef = useRef(drawCanvas);
@@ -825,7 +888,7 @@ function VectorPreviewComponent({
     if (!isSimulating) {
       scheduleRedraw();
     }
-  }, [zoomLevel, panOffset, showWorkArea, showInkDips, isSimulating, scheduleRedraw]);
+  }, [zoomLevel, panOffset, showWorkArea, showInkDips, showBacklash, isSimulating, scheduleRedraw]);
 
   // Redraw when machine position updates (for realtime indicator)
   useEffect(() => {
@@ -1214,6 +1277,19 @@ function VectorPreviewComponent({
                 >
                   <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <rect x="3" y="3" width="18" height="18" rx="2" strokeWidth="2" strokeDasharray="4 2" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => setShowBacklash(s => !s)}
+                  className={`w-7 h-7 rounded flex items-center justify-center transition-colors ${
+                    showBacklash
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-slate-700/50 text-slate-500 hover:text-slate-300 hover:bg-slate-700'
+                  }`}
+                  title={showBacklash ? 'Showing backlash compensation (click to hide)' : 'Hiding backlash compensation (click to show)'}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                 </button>
               </div>
