@@ -179,6 +179,7 @@ function CollapsibleSection({
 function ProfileSelector({
   profiles,
   activeProfileId,
+  currentSettings,
   onLoadProfile,
   onSaveAsProfile,
   onUpdateProfile,
@@ -187,6 +188,7 @@ function ProfileSelector({
 }: {
   profiles: MachineProfile[];
   activeProfileId: string | null;
+  currentSettings: VectorSettings;
   onLoadProfile: (id: string) => void;
   onSaveAsProfile: (name: string) => string;
   onUpdateProfile: (id: string) => void;
@@ -281,6 +283,28 @@ function ProfileSelector({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Save As
+        </button>
+
+        <button
+          onClick={() => {
+            const profileName = activeProfile?.name || 'custom-settings';
+            const fileName = `nirmana-${profileName.toLowerCase().replace(/\s+/g, '-')}.json`;
+            const blob = new Blob([JSON.stringify(currentSettings, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          className="px-2 py-1 text-[10px] bg-slate-600 hover:bg-slate-500 text-white rounded
+                     transition-colors flex items-center gap-1"
+          title="Download settings as JSON for sharing"
+        >
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Download
         </button>
 
         {canUpdate && (
@@ -518,6 +542,7 @@ export function VectorSettingsPanel({
           <ProfileSelector
             profiles={profiles}
             activeProfileId={activeProfileId ?? null}
+            currentSettings={settings}
             onLoadProfile={onLoadProfile}
             onSaveAsProfile={onSaveAsProfile}
             onUpdateProfile={onUpdateProfile}
