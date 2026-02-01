@@ -545,7 +545,7 @@ export default function App() {
                       height={settings.canvasHeight}
                       gcodeLines={gcodeLines}
                       showSimulation={true}
-                      machinePosition={fluidNC.status.position}
+                      machinePosition={fluidNC.status.position?.coords}
                       isConnected={fluidNC.isConnected}
                       outputSettings={outputSettings}
                       clipToWorkArea={settings.clipToWorkArea}

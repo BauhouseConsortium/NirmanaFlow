@@ -649,11 +649,20 @@ export function VectorSettingsPanel({
           unit="mm/m"
         />
         <NumberInput
-          label="Safe Z"
+          label="Safe Z (Brush)"
           value={settings.safeZ}
           onChange={v => onUpdate('safeZ', v)}
           min={1}
           max={20}
+          unit="mm"
+        />
+        <NumberInput
+          label="Safe Z (Plotter)"
+          value={settings.safeZPlotter}
+          onChange={v => onUpdate('safeZPlotter', v)}
+          min={0.5}
+          max={20}
+          step={0.5}
           unit="mm"
         />
         <NumberInput

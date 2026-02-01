@@ -22,7 +22,8 @@ export const VectorSettingsSchema = z.object({
   feedRate: z.number().min(100).max(10000).default(1600),
   backlashX: z.number().min(0).max(5).default(0),
   backlashY: z.number().min(0).max(5).default(0),
-  safeZ: z.number().min(1).max(50).default(5),
+  safeZ: z.number().min(1).max(50).default(5), // For brush mode (with dipping)
+  safeZPlotter: z.number().min(0.5).max(20).default(2), // For plotter mode (continuous)
 
   // Ink dipping
   dipInterval: z.number().min(10).max(500).default(80),
@@ -185,6 +186,7 @@ export function getFieldConstraints(key: keyof VectorSettings): { min?: number; 
     backlashX: { min: 0, max: 5, step: 0.1 },
     backlashY: { min: 0, max: 5, step: 0.1 },
     safeZ: { min: 1, max: 50, step: 1 },
+    safeZPlotter: { min: 0.5, max: 20, step: 0.5 },
     dipInterval: { min: 10, max: 500, step: 10 },
     dipX: { min: 0, max: 200, step: 1 },
     dipY: { min: 0, max: 200, step: 1 },

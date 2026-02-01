@@ -240,7 +240,8 @@ export function generateVectorGCode(
     feedRate,
     backlashX,
     backlashY,
-    safeZ,
+    safeZ: safeZBrush,
+    safeZPlotter = 2, // Default for plotter mode
     dipInterval,
     continuousPlot,
     customDipSequence,
@@ -249,6 +250,9 @@ export function generateVectorGCode(
     artefactThreshold,
     clipToWorkArea,
   } = settings;
+
+  // Use appropriate safe Z based on mode
+  const safeZ = continuousPlot ? safeZPlotter : safeZBrush;
 
   // Generate dip sequence G-code using custom or default sequence
   const generateDipGCode = (dipX: number, dipY: number): string[] => {
