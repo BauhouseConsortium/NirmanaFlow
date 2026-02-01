@@ -229,3 +229,34 @@ export function hasPositionChanged(
     Math.abs(prev.coords.z - next.coords.z) > threshold
   );
 }
+
+// ============ Web Worker Message Types ============
+
+/**
+ * Commands sent from main thread to worker
+ */
+export type WorkerCommand =
+  | { type: 'connect'; host: string; options?: WorkerConnectOptions }
+  | { type: 'disconnect' }
+  | { type: 'send'; command: string }
+  | { type: 'sendRealtime'; char: string }
+  | { type: 'startStreaming'; lines: string[] }
+  | { type: 'pauseStreaming' }
+  | { type: 'resumeStreaming' }
+  | { type: 'cancelStreaming' };
+
+export interface WorkerConnectOptions {
+  autoReport?: boolean;
+  reportInterval?: number;
+}
+
+/**
+ * Messages sent from worker to main thread
+ */
+export type WorkerMessage =
+  | { type: 'status'; data: Partial<FluidNCStatus> }
+  | { type: 'streaming'; data: Partial<StreamingProgress> }
+  | { type: 'connected' }
+  | { type: 'disconnected' }
+  | { type: 'error'; message: string }
+  | { type: 'log'; level: 'info' | 'warn' | 'error'; message: string };
