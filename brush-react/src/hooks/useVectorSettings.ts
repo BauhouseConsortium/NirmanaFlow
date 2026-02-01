@@ -2,7 +2,6 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { z } from 'zod';
 
 // LocalStorage keys
-const STORAGE_KEY = 'brush-vector-settings';
 const PROFILES_KEY = 'brush-vector-profiles';
 const ACTIVE_PROFILE_KEY = 'brush-active-vector-profile';
 

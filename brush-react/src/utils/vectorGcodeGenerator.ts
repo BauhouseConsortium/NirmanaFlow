@@ -24,6 +24,7 @@ export interface VectorSettings {
   backlashX: number;
   backlashY: number;
   safeZ: number;
+  safeZPlotter?: number;
 
   // Ink/Dip settings
   dipInterval: number;

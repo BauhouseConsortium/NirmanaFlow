@@ -107,7 +107,7 @@ function ToolbarComponent({
   onExportSVG,
   onExportGCode,
   onUpload,
-  onStream,
+  onStream: _onStream,
   onStreamInkMode,
   onStreamPlotterMode,
   hasOutput,

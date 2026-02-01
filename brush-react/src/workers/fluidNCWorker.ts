@@ -168,7 +168,7 @@ function applyZOffset(line: string, offset: number): string {
   // Pattern: Z followed by optional minus sign, digits, optional decimal point and more digits
   const zPattern = /Z(-?\d+\.?\d*)/gi;
 
-  return line.replace(zPattern, (match, zValue) => {
+  return line.replace(zPattern, (_match, zValue) => {
     const originalZ = parseFloat(zValue);
     const adjustedZ = originalZ + offset;
     // Preserve original precision (3 decimal places for consistency)

@@ -23,7 +23,7 @@ type ClipperNodeProps = {
 };
 
 function ClipperNodeComponent({ data, id }: ClipperNodeProps) {
-  const [expanded, setExpanded] = useState(false);
+  const [_expanded, _setExpanded] = useState(false);
 
   const handleChange = useCallback((field: string, value: unknown) => {
     const event = new CustomEvent('nodeDataChange', {
