@@ -5,6 +5,7 @@ interface StreamingProgressProps {
   onPause: () => void;
   onResume: () => void;
   onCancel: () => void;
+  onZOffsetChange?: (offset: number) => void;
 }
 
 function formatTime(ms: number): string {
@@ -19,8 +20,9 @@ export function StreamingProgress({
   onPause,
   onResume,
   onCancel,
+  onZOffsetChange,
 }: StreamingProgressProps) {
-  const { state, currentLine, totalLines, percentage, currentCommand, elapsedTime, errors } = streaming;
+  const { state, currentLine, totalLines, percentage, currentCommand, elapsedTime, errors, zOffset = 0 } = streaming;
 
   if (state === 'idle') return null;
 
@@ -98,6 +100,59 @@ export function StreamingProgress({
       <div className="text-xs font-mono text-slate-400 truncate bg-slate-900 rounded px-2 py-1">
         {currentCommand || '...'}
       </div>
+
+      {/* Live Z Offset Adjustment */}
+      {(isStreaming || isPaused) && onZOffsetChange && (
+        <div className="flex items-center justify-between bg-slate-900/50 rounded-lg px-3 py-2 border border-slate-700/50">
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+            </svg>
+            <span className="text-xs text-slate-400">Z Offset</span>
+            <span className={`text-sm font-mono font-medium ${zOffset !== 0 ? 'text-cyan-400' : 'text-slate-300'}`}>
+              {zOffset >= 0 ? '+' : ''}{zOffset.toFixed(2)}mm
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => onZOffsetChange(zOffset - 1)}
+              className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors"
+              title="Lower Z by 1mm"
+            >
+              -1
+            </button>
+            <button
+              onClick={() => onZOffsetChange(zOffset - 0.1)}
+              className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors"
+              title="Lower Z by 0.1mm"
+            >
+              -0.1
+            </button>
+            <button
+              onClick={() => onZOffsetChange(0)}
+              disabled={zOffset === 0}
+              className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-300 rounded transition-colors"
+              title="Reset Z offset"
+            >
+              ⟲
+            </button>
+            <button
+              onClick={() => onZOffsetChange(zOffset + 0.1)}
+              className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors"
+              title="Raise Z by 0.1mm"
+            >
+              +0.1
+            </button>
+            <button
+              onClick={() => onZOffsetChange(zOffset + 1)}
+              className="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors"
+              title="Raise Z by 1mm"
+            >
+              +1
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Errors */}
       {errors.length > 0 && (

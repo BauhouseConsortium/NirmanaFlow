@@ -13,6 +13,10 @@ interface JogControlModalProps {
   onSetZero: () => void;
   onGoToZero: () => void;
   onStop: () => void;
+  // Z offset for live adjustment during streaming
+  zOffset?: number;
+  onZOffsetChange?: (offset: number) => void;
+  isStreaming?: boolean;
 }
 
 const STEP_SIZES = [0.1, 1, 10, 50, 100];
@@ -40,6 +44,9 @@ export function JogControlModal({
   onSetZero,
   onGoToZero,
   onStop,
+  zOffset = 0,
+  onZOffsetChange,
+  isStreaming = false,
 }: JogControlModalProps) {
   const [stepSize, setStepSize] = useState(10);
   const [feedRate, setFeedRate] = useState(1000);
@@ -295,6 +302,78 @@ export function JogControlModal({
                          [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer"
             />
           </div>
+
+          {/* Z Offset - Live Adjustment */}
+          {onZOffsetChange && (
+            <div className="space-y-2 p-3 bg-slate-900/50 rounded-lg border border-cyan-500/30">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <svg className="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+                  </svg>
+                  <span className="text-xs text-cyan-400 font-medium">Z Offset (Live)</span>
+                  {isStreaming && (
+                    <span className="px-1.5 py-0.5 text-[10px] bg-blue-500/20 text-blue-400 rounded">
+                      STREAMING
+                    </span>
+                  )}
+                </div>
+                <span className={`text-sm font-mono font-medium ${zOffset !== 0 ? 'text-cyan-400' : 'text-slate-300'}`}>
+                  {zOffset >= 0 ? '+' : ''}{zOffset.toFixed(2)}mm
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => onZOffsetChange(zOffset - 1)}
+                  disabled={!isConnected}
+                  className="flex-1 py-2 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 
+                             disabled:cursor-not-allowed text-slate-300 rounded-lg transition-colors font-medium"
+                  title="Lower Z by 1mm"
+                >
+                  -1
+                </button>
+                <button
+                  onClick={() => onZOffsetChange(zOffset - 0.1)}
+                  disabled={!isConnected}
+                  className="flex-1 py-2 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 
+                             disabled:cursor-not-allowed text-slate-300 rounded-lg transition-colors font-medium"
+                  title="Lower Z by 0.1mm"
+                >
+                  -0.1
+                </button>
+                <button
+                  onClick={() => onZOffsetChange(0)}
+                  disabled={!isConnected || zOffset === 0}
+                  className="px-3 py-2 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 
+                             disabled:cursor-not-allowed text-slate-300 rounded-lg transition-colors font-medium"
+                  title="Reset Z offset"
+                >
+                  ⟲
+                </button>
+                <button
+                  onClick={() => onZOffsetChange(zOffset + 0.1)}
+                  disabled={!isConnected}
+                  className="flex-1 py-2 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 
+                             disabled:cursor-not-allowed text-slate-300 rounded-lg transition-colors font-medium"
+                  title="Raise Z by 0.1mm"
+                >
+                  +0.1
+                </button>
+                <button
+                  onClick={() => onZOffsetChange(zOffset + 1)}
+                  disabled={!isConnected}
+                  className="flex-1 py-2 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 
+                             disabled:cursor-not-allowed text-slate-300 rounded-lg transition-colors font-medium"
+                  title="Raise Z by 1mm"
+                >
+                  +1
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-500 text-center">
+                Adjusts Z height in real-time during printing
+              </p>
+            </div>
+          )}
 
           {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-2">

@@ -36,6 +36,9 @@ let streamingTimer: ReturnType<typeof setInterval> | null = null;
 let streamingStartTime: number | null = null;
 const maxPendingOks = 1; // Conservative: wait for ok before sending next
 
+// Live Z offset adjustment
+let currentZOffset = 0;
+
 // Position throttling
 let lastPosition: PositionData = { coords: { x: 0, y: 0, z: 0 }, type: 'WPos' };
 
@@ -152,6 +155,39 @@ function parseStatusMessage(data: string): Partial<FluidNCStatus> | null {
   return updates;
 }
 
+// ============ Z Offset ============
+
+/**
+ * Apply Z offset to a G-code line
+ * Parses and adjusts any Z values in G0, G1, G2, G3 commands
+ */
+function applyZOffset(line: string, offset: number): string {
+  if (offset === 0) return line;
+
+  // Match Z values in G-code (handles both integer and decimal)
+  // Pattern: Z followed by optional minus sign, digits, optional decimal point and more digits
+  const zPattern = /Z(-?\d+\.?\d*)/gi;
+
+  return line.replace(zPattern, (match, zValue) => {
+    const originalZ = parseFloat(zValue);
+    const adjustedZ = originalZ + offset;
+    // Preserve original precision (3 decimal places for consistency)
+    return `Z${adjustedZ.toFixed(3)}`;
+  });
+}
+
+/**
+ * Set the live Z offset
+ */
+function setZOffset(offset: number) {
+  currentZOffset = offset;
+  postMessage({
+    type: 'streaming',
+    data: { zOffset: offset },
+  });
+  log('info', `Z offset set to ${offset.toFixed(2)}mm`);
+}
+
 // ============ Streaming ============
 
 function sendNextStreamingLines() {
@@ -171,16 +207,18 @@ function sendNextStreamingLines() {
 
     // Skip empty lines and comments (but still count them for progress)
     if (line && !line.startsWith(';') && !line.startsWith('(') && line !== '%') {
-      ws.send(line + '\n');
+      // Apply live Z offset to commands with Z values
+      const adjustedLine = applyZOffset(line, currentZOffset);
+      ws.send(adjustedLine + '\n');
       pendingOkCount++;
 
-      // Update progress
+      // Update progress (show adjusted command if Z offset is active)
       postMessage({
         type: 'streaming',
         data: {
           currentLine: lineIndex + 1,
           percentage: Math.round(((lineIndex + 1) / totalLines) * 100),
-          currentCommand: line,
+          currentCommand: adjustedLine,
           elapsedTime: streamingStartTime ? Date.now() - streamingStartTime : 0,
         },
       });
@@ -447,6 +485,7 @@ function startStreaming(lines: string[]) {
       startTime: streamingStartTime,
       elapsedTime: 0,
       errors: [],
+      zOffset: currentZOffset, // Include current Z offset in initial state
     },
   });
 
@@ -545,6 +584,10 @@ ctx.onmessage = (event: MessageEvent<WorkerCommand>) => {
 
     case 'cancelStreaming':
       cancelStreaming();
+      break;
+
+    case 'setZOffset':
+      setZOffset(command.offset);
       break;
   }
 };

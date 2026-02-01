@@ -318,6 +318,11 @@ export default function App() {
     log('Streaming cancelled', 'warning');
   }, [fluidNC, log]);
 
+  const handleZOffsetChange = useCallback((offset: number) => {
+    fluidNC.setZOffset(offset);
+    log(`Z offset: ${offset >= 0 ? '+' : ''}${offset.toFixed(2)}mm`, 'info');
+  }, [fluidNC, log]);
+
   // Machine control callbacks for Tool menu
   const handleHome = useCallback(() => {
     // Custom homing sequence - moves to corner, finds zero
@@ -428,6 +433,9 @@ export default function App() {
         onSetZero={handleSetZero}
         onGoToZero={handleGoToZero}
         onStop={handleStop}
+        zOffset={fluidNC.streaming.zOffset}
+        onZOffsetChange={handleZOffsetChange}
+        isStreaming={fluidNC.isStreaming}
       />
 
       {/* Header */}
@@ -582,6 +590,7 @@ export default function App() {
                         onPause={handlePauseStreaming}
                         onResume={handleResumeStreaming}
                         onCancel={handleCancelStreaming}
+                        onZOffsetChange={handleZOffsetChange}
                       />
                     </div>
                   )}

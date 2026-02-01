@@ -68,6 +68,7 @@ export const StreamingProgressSchema = z.object({
   startTime: z.number().nullable(),
   elapsedTime: z.number().min(0),
   errors: z.array(z.string()),
+  zOffset: z.number().default(0), // Live Z offset adjustment
 });
 export type StreamingProgress = z.infer<typeof StreamingProgressSchema>;
 
@@ -92,6 +93,7 @@ export const INITIAL_STREAMING: StreamingProgress = {
   startTime: null,
   elapsedTime: 0,
   errors: [],
+  zOffset: 0,
 };
 
 // ============ Parser Helpers ============
@@ -243,7 +245,8 @@ export type WorkerCommand =
   | { type: 'startStreaming'; lines: string[] }
   | { type: 'pauseStreaming' }
   | { type: 'resumeStreaming' }
-  | { type: 'cancelStreaming' };
+  | { type: 'cancelStreaming' }
+  | { type: 'setZOffset'; offset: number };
 
 export interface WorkerConnectOptions {
   autoReport?: boolean;

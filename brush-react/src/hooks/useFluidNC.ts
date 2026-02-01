@@ -230,6 +230,11 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
     sendCommand({ type: 'cancelStreaming' });
   }, [sendCommand]);
 
+  // Set live Z offset (can be adjusted during streaming)
+  const setZOffset = useCallback((offset: number) => {
+    sendCommand({ type: 'setZOffset', offset });
+  }, [sendCommand]);
+
   // Auto-connect on mount if enabled
   useEffect(() => {
     if (autoConnect) {
@@ -267,6 +272,8 @@ export function useFluidNC(host: string, options: UseFluidNCOptions = {}) {
     pauseStreaming,
     resumeStreaming,
     cancelStreaming,
+    // Live Z offset
+    setZOffset,
     isConnected: status.connectionState === 'connected',
     isStreaming: streaming.state === 'streaming' || streaming.state === 'paused',
   };
