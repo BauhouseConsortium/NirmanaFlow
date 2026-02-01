@@ -34,6 +34,7 @@ export default function App() {
     loadSettings,
     profiles,
     activeProfileId,
+    isDirty,
     loadProfile,
     saveAsProfile,
     updateProfile,
@@ -549,6 +550,7 @@ export default function App() {
                           isConnected={fluidNC.isConnected}
                           profiles={profiles}
                           activeProfileId={activeProfileId}
+                          isDirty={isDirty}
                           onLoadProfile={loadProfile}
                           onSaveAsProfile={saveAsProfile}
                           onUpdateProfile={updateProfile}

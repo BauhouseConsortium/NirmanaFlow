@@ -307,31 +307,35 @@ export function getFieldConstraints(key: keyof VectorSettings): { min?: number; 
 }
 
 export function useVectorSettings() {
-  // Load initial settings from localStorage (with validation)
-  const [settings, setSettings] = useState<VectorSettings>(() => {
-    const stored = loadFromStorage<Partial<VectorSettings>>(STORAGE_KEY, {});
-    const result = validateSettings({ ...DEFAULT_SETTINGS, ...stored });
-    return result.success && result.data ? result.data : DEFAULT_SETTINGS;
-  });
-  
-  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  
-  // Load custom profiles from localStorage
+  // Load custom profiles from localStorage first
   const [customProfiles, setCustomProfiles] = useState<MachineProfile[]>(() =>
     loadFromStorage(PROFILES_KEY, [])
   );
   
-  // Track active profile ID (null means custom/modified)
+  // Track active profile ID (which profile is selected)
   const [activeProfileId, setActiveProfileId] = useState<string | null>(() =>
     loadFromStorage(ACTIVE_PROFILE_KEY, 'default')
   );
+  
+  // Load initial settings from the active profile (not auto-saved)
+  const [settings, setSettings] = useState<VectorSettings>(() => {
+    const savedProfileId = loadFromStorage(ACTIVE_PROFILE_KEY, 'default');
+    const savedCustomProfiles = loadFromStorage<MachineProfile[]>(PROFILES_KEY, []);
+    const allProfiles = [...BUILT_IN_PROFILES, ...savedCustomProfiles];
+    const activeProfile = allProfiles.find(p => p.id === savedProfileId);
+    if (activeProfile) {
+      const result = validateSettings(activeProfile.settings);
+      return result.success && result.data ? result.data : DEFAULT_SETTINGS;
+    }
+    return DEFAULT_SETTINGS;
+  });
+  
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  
+  // Track if settings have been modified from the active profile
+  const [isDirty, setIsDirty] = useState(false);
 
-  // Autosave settings to localStorage whenever they change
-  useEffect(() => {
-    saveToStorage(STORAGE_KEY, settings);
-  }, [settings]);
-
-  // Save custom profiles to localStorage
+  // Save custom profiles to localStorage (profiles persist, but not auto-save settings)
   useEffect(() => {
     saveToStorage(PROFILES_KEY, customProfiles);
   }, [customProfiles]);
@@ -351,8 +355,8 @@ export function useVectorSettings() {
         const { [key]: _, ...rest } = prev;
         return rest;
       });
-      // Mark as modified when settings change
-      setActiveProfileId(null);
+      // Mark as dirty when settings change
+      setIsDirty(true);
     } else if (result.errors) {
       const errorMessage = result.errors.issues[0]?.message || 'Invalid value';
       setValidationErrors(prev => ({ ...prev, [key]: errorMessage }));
@@ -362,13 +366,14 @@ export function useVectorSettings() {
   // Update without validation (for trusted sources)
   const updateSettingUnsafe = useCallback(<K extends keyof VectorSettings>(key: K, value: VectorSettings[K]) => {
     setSettings(prev => ({ ...prev, [key]: value }));
-    setActiveProfileId(null);
+    setIsDirty(true);
   }, []);
 
   const resetSettings = useCallback(() => {
     setSettings(DEFAULT_SETTINGS);
     setValidationErrors({});
     setActiveProfileId('default');
+    setIsDirty(false);
   }, []);
 
   // Load settings from a partial object (merges with defaults and validates)
@@ -407,6 +412,7 @@ export function useVectorSettings() {
         setSettings(result.data);
         setValidationErrors({});
         setActiveProfileId(profileId);
+        setIsDirty(false);
       }
     }
   }, [customProfiles]);
@@ -425,6 +431,7 @@ export function useVectorSettings() {
     };
     setCustomProfiles(prev => [...prev, newProfile]);
     setActiveProfileId(id);
+    setIsDirty(false);
     return id;
   }, [settings]);
 
@@ -438,6 +445,7 @@ export function useVectorSettings() {
       )
     );
     setActiveProfileId(profileId);
+    setIsDirty(false);
   }, [settings]);
 
   // Delete a custom profile
@@ -446,6 +454,7 @@ export function useVectorSettings() {
     if (activeProfileId === profileId) {
       setActiveProfileId('default');
       setSettings(DEFAULT_SETTINGS);
+      setIsDirty(false);
     }
   }, [activeProfileId]);
 
@@ -481,6 +490,7 @@ export function useVectorSettings() {
     // Profile management
     profiles: allProfiles,
     activeProfileId,
+    isDirty,
     loadProfile,
     saveAsProfile,
     updateProfile,
