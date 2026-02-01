@@ -6,6 +6,8 @@ interface ToolbarProps {
   onExportGCode: () => void;
   onUpload: () => void;
   onStream: () => void;
+  onStreamInkMode?: () => void;
+  onStreamPlotterMode?: () => void;
   hasOutput: boolean;
   isLoading: boolean;
   isConnected: boolean;
@@ -27,9 +29,10 @@ interface DropdownProps {
   disabled?: boolean;
   children: React.ReactNode;
   variant?: 'default' | 'primary';
+  width?: string;
 }
 
-function Dropdown({ label, icon, disabled, children, variant = 'default' }: DropdownProps) {
+function Dropdown({ label, icon, disabled, children, variant = 'default', width = 'min-w-[140px]' }: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -64,8 +67,8 @@ function Dropdown({ label, icon, disabled, children, variant = 'default' }: Drop
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-1 min-w-[140px] bg-slate-800 border border-slate-600
-                       rounded-lg shadow-xl z-50 py-1 overflow-hidden">
+        <div className={`absolute top-full left-0 mt-1 ${width} bg-slate-800 border border-slate-600
+                       rounded-lg shadow-xl z-50 py-1 overflow-hidden`}>
           {children}
         </div>
       )}
@@ -105,6 +108,8 @@ function ToolbarComponent({
   onExportGCode,
   onUpload,
   onStream,
+  onStreamInkMode,
+  onStreamPlotterMode,
   hasOutput,
   isLoading,
   isConnected,
@@ -289,12 +294,54 @@ function ToolbarComponent({
         label={isStreaming ? 'Printing...' : 'Print'}
         disabled={!hasOutput}
         variant="primary"
+        width="w-56"
         icon={
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         }
       >
+        <div className="p-1">
+          <button
+            onClick={() => onStreamInkMode?.()}
+            disabled={!hasOutput || !isConnected || isStreaming}
+            className="w-full p-2 rounded-lg text-left transition-colors hover:bg-slate-700/70 disabled:opacity-50 disabled:cursor-not-allowed group"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-500/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-blue-400" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M12 2c-5.33 8.33-8 12.67-8 16a8 8 0 1 0 16 0c0-3.33-2.67-7.67-8-16z" />
+                </svg>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-white">Brush Mode</div>
+                <div className="text-[10px] text-slate-400">With ink dipping</div>
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={() => onStreamPlotterMode?.()}
+            disabled={!hasOutput || !isConnected || isStreaming}
+            className="w-full p-2 rounded-lg text-left transition-colors hover:bg-slate-700/70 disabled:opacity-50 disabled:cursor-not-allowed group"
+          >
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                </svg>
+              </div>
+              <div>
+                <div className="text-sm font-medium text-white">Plotter Mode</div>
+                <div className="text-[10px] text-slate-400">Continuous drawing</div>
+              </div>
+            </div>
+          </button>
+        </div>
+
+        <div className="mx-2 my-1 border-t border-slate-700/50" />
+
         <DropdownItem
           onClick={onUpload}
           disabled={!hasOutput}
@@ -305,17 +352,6 @@ function ToolbarComponent({
           }
         >
           Upload to SD
-        </DropdownItem>
-        <DropdownItem
-          onClick={onStream}
-          disabled={!hasOutput || !isConnected || isStreaming}
-          icon={
-            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-            </svg>
-          }
-        >
-          {isStreaming ? 'Printing...' : 'Print Now'}
         </DropdownItem>
       </Dropdown>
     </div>

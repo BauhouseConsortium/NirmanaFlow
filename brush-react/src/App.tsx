@@ -233,6 +233,58 @@ export default function App() {
     }
   }, [gcodeResult, fluidNC, log]);
 
+  // Print in Ink Mode (with dipping)
+  const handleStreamInkMode = useCallback(() => {
+    if (paths.length === 0) {
+      log('No paths to print', 'error');
+      return;
+    }
+
+    if (!fluidNC.isConnected) {
+      log('Not connected to FluidNC. Click the connection button first.', 'error');
+      return;
+    }
+
+    // Generate G-code with dipping enabled
+    const inkSettings = { ...settings, continuousPlot: false };
+    const gcode = generateVectorGCode(paths, inkSettings);
+
+    log(`Brush Mode: ${gcode.lines.length} lines, ${gcode.stats.dipCount} dips`, 'info');
+    const success = fluidNC.startStreaming(gcode.lines);
+
+    if (success) {
+      log('Printing in Brush Mode (with dipping)', 'success');
+    } else {
+      log('Failed to start streaming', 'error');
+    }
+  }, [paths, settings, fluidNC, log]);
+
+  // Print in Plotter Mode (continuous, no dipping)
+  const handleStreamPlotterMode = useCallback(() => {
+    if (paths.length === 0) {
+      log('No paths to print', 'error');
+      return;
+    }
+
+    if (!fluidNC.isConnected) {
+      log('Not connected to FluidNC. Click the connection button first.', 'error');
+      return;
+    }
+
+    // Generate G-code with continuous plot (no dipping)
+    const plotterSettings = { ...settings, continuousPlot: true };
+    const gcode = generateVectorGCode(paths, plotterSettings);
+
+    log(`Plotter Mode: ${gcode.lines.length} lines, continuous`, 'info');
+    const success = fluidNC.startStreaming(gcode.lines);
+
+    if (success) {
+      log('Printing in Plotter Mode (continuous)', 'success');
+    } else {
+      log('Failed to start streaming', 'error');
+    }
+  }, [paths, settings, fluidNC, log]);
+
   // Memoize gcodeLines to prevent unnecessary re-renders of VectorPreview
   const gcodeLines = useMemo(() => gcodeResult?.lines ?? [], [gcodeResult?.lines]);
 
@@ -401,6 +453,8 @@ export default function App() {
               onExportGCode={handleExportGCode}
               onUpload={handleUpload}
               onStream={handleStream}
+              onStreamInkMode={handleStreamInkMode}
+              onStreamPlotterMode={handleStreamPlotterMode}
               hasOutput={!!gcodeResult}
               isLoading={isLoading}
               isConnected={fluidNC.isConnected}
