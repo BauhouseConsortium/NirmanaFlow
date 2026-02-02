@@ -157,6 +157,12 @@ export default function App() {
     settings.safeZ,
     settings.artefactThreshold,
     settings.clipToWorkArea,
+    // Path optimization settings
+    settings.plotterOptimize,
+    settings.removeDuplicateLines,
+    settings.mergeConnectedPaths,
+    settings.optimizePathOrder,
+    settings.optimizePaths,
   ]);
 
   const handleRun = useCallback(() => {

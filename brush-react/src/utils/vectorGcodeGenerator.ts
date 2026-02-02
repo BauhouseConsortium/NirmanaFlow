@@ -268,10 +268,14 @@ export function generateVectorGCode(
   // Extract plain paths for optimization, then re-associate with colors
   const plainPaths = filteredPaths.map(cp => cp.points);
   const colors = filteredPaths.map(cp => cp.color);
-  let optimizedPlainPaths = optimizePaths(plainPaths);
+  let optimizedPlainPaths = plainPaths;
 
   // Apply plotter optimization if enabled
   if (settings.plotterOptimize) {
+    // First apply basic path merging
+    optimizedPlainPaths = optimizePaths(plainPaths);
+    
+    // Then apply advanced plotter optimization
     const plotterResult = optimizeForPlotter(optimizedPlainPaths, {
       removeDuplicates: settings.removeDuplicateLines ?? true,
       mergePaths: settings.mergeConnectedPaths ?? true,
@@ -285,16 +289,13 @@ export function generateVectorGCode(
     if (plotterResult.stats.duplicatesRemoved > 0 || plotterResult.stats.pathsMerged > 0) {
       console.log(`Plotter optimization: removed ${plotterResult.stats.duplicatesRemoved} duplicate segments, merged ${plotterResult.stats.pathsMerged} paths, ${plotterResult.stats.travelReduction}% travel reduction`);
     }
-  }
 
-  // Note: optimization may reorder paths, so we need to create new ColoredPaths
-  // For simplicity, we'll use the paths as-is if colors are being used
-  // If no colors are set, we can use the optimized paths
-  if (colorPaletteEnabled && colors.some(c => c !== undefined)) {
-    // Keep original order to preserve color associations
-    // (optimization might break color groupings)
-  } else {
-    filteredPaths = optimizedPlainPaths.map(points => ({ points, color: undefined }));
+    // Note: optimization may reorder paths, so we need to create new ColoredPaths
+    // For simplicity, we'll use the paths as-is if colors are being used
+    // If no colors are set, we can use the optimized paths
+    if (!(colorPaletteEnabled && colors.some(c => c !== undefined))) {
+      filteredPaths = optimizedPlainPaths.map(points => ({ points, color: undefined }));
+    }
   }
 
   // Note: For Clipper2 advanced optimization, use generateVectorGCodeAsync instead
